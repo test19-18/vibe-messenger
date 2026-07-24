@@ -1,0 +1,1286 @@
+import 'dart:async';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../../core/errors/error_message.dart';
+import '../../../core/localization/app_localizations.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/async_state_view.dart';
+import '../../auth/providers/auth_providers.dart';
+import '../../chats/domain/conversation_summary.dart';
+import '../../chats/providers/conversation_providers.dart';
+import '../../contacts/providers/contact_providers.dart';
+import '../../settings/domain/app_preferences.dart';
+import '../../settings/providers/settings_providers.dart';
+import '../domain/chat_message.dart';
+import '../domain/message_details.dart';
+import '../providers/message_providers.dart';
+import '../services/voice_recording_service.dart';
+import 'widgets/enhanced_message_bubble.dart';
+import 'widgets/message_composer.dart';
+
+class EnhancedConversationScreen extends ConsumerStatefulWidget {
+  const EnhancedConversationScreen({
+    required this.conversationId,
+    super.key,
+    this.title,
+    this.isGroup = false,
+  });
+
+  final String conversationId;
+  final String? title;
+  final bool isGroup;
+
+  @override
+  ConsumerState<EnhancedConversationScreen> createState() =>
+      _EnhancedConversationScreenState();
+}
+
+class _EnhancedConversationScreenState
+    extends ConsumerState<EnhancedConversationScreen> {
+  final _composerController = TextEditingController();
+  final _composerFocusNode = FocusNode();
+  final _selectedIds = <String>{};
+  final _voiceRecorder = VoiceRecordingService();
+  ChatMessage? _replyTo;
+  ChatMessage? _editing;
+  Timer? _typingTimer;
+  Timer? _draftTimer;
+  bool _recording = false;
+  bool _draftLoaded = false;
+
+  String? get _currentUserId => ref.read(currentUserProvider)?.id;
+
+  @override
+  void dispose() {
+    _typingTimer?.cancel();
+    _draftTimer?.cancel();
+    unawaited(_voiceRecorder.dispose());
+    _composerController.dispose();
+    _composerFocusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _markRead(List<ChatMessage> messages) async {
+    final userId = _currentUserId;
+    if (userId == null || messages.isEmpty) {
+      return;
+    }
+    try {
+      await ref
+          .read(messageServiceProvider)
+          .markRead(
+            conversationId: widget.conversationId,
+            userId: userId,
+            lastReadMessageId: messages.last.id,
+          );
+    } catch (_) {
+      // Read receipts are best effort and never block chat rendering.
+    }
+  }
+
+  void _loadDraft(List<ConversationSummary>? conversations) {
+    if (_draftLoaded || conversations == null) {
+      return;
+    }
+    _draftLoaded = true;
+    final summary = conversations
+        .where((item) => item.id == widget.conversationId)
+        .firstOrNull;
+    final draft = summary?.draft;
+    if (draft?.isNotEmpty == true) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _composerController.text.isNotEmpty) {
+          return;
+        }
+        _composerController.text = draft!;
+        _composerController.selection = TextSelection.collapsed(
+          offset: draft.length,
+        );
+      });
+    }
+  }
+
+  void _handleTyping(String text) {
+    _draftTimer?.cancel();
+    _draftTimer = Timer(const Duration(milliseconds: 500), () {
+      unawaited(_saveDraft(text));
+    });
+    final preferences =
+        ref.read(appPreferencesProvider).valueOrNull ?? const AppPreferences();
+    if (!preferences.showTypingStatus) {
+      return;
+    }
+    final typing = ref.read(typingServiceProvider(widget.conversationId));
+    _typingTimer?.cancel();
+    unawaited(typing.setTyping(text.trim().isNotEmpty));
+    if (text.trim().isNotEmpty) {
+      _typingTimer = Timer(const Duration(milliseconds: 1400), () {
+        unawaited(typing.setTyping(false));
+      });
+    }
+  }
+
+  Future<void> _saveDraft(String value) async {
+    final userId = _currentUserId;
+    if (userId == null) {
+      return;
+    }
+    try {
+      await ref
+          .read(conversationRepositoryProvider)
+          .updateConversationSettings(
+            conversationId: widget.conversationId,
+            userId: userId,
+            draft: value,
+          );
+      ref.invalidate(conversationsProvider);
+    } catch (_) {
+      // Draft sync retries on the next edit and must not interrupt typing.
+    }
+  }
+
+  Future<void> _submit() async {
+    final controller = ref.read(
+      messageMutationProvider(widget.conversationId).notifier,
+    );
+    final text = _composerController.text;
+    final success = _editing == null
+        ? await controller.send(text, replyToId: _replyTo?.id)
+        : await controller.edit(_editing!, text);
+    if (!mounted || !success) {
+      return;
+    }
+    _composerController.clear();
+    _typingTimer?.cancel();
+    _draftTimer?.cancel();
+    unawaited(_saveDraft(''));
+    unawaited(
+      ref.read(typingServiceProvider(widget.conversationId)).setTyping(false),
+    );
+    setState(() {
+      _replyTo = null;
+      _editing = null;
+    });
+  }
+
+  void _startReply(ChatMessage message) {
+    setState(() {
+      _replyTo = message;
+      _editing = null;
+    });
+    _composerFocusNode.requestFocus();
+  }
+
+  void _startEdit(ChatMessage message) {
+    setState(() {
+      _editing = message;
+      _replyTo = null;
+      _composerController.text = message.body;
+      _composerController.selection = TextSelection.collapsed(
+        offset: _composerController.text.length,
+      );
+    });
+    _composerFocusNode.requestFocus();
+  }
+
+  void _clearComposerContext() {
+    setState(() {
+      _replyTo = null;
+      _editing = null;
+      _composerController.clear();
+    });
+    unawaited(_saveDraft(''));
+  }
+
+  void _toggleSelection(ChatMessage message) {
+    setState(() {
+      if (!_selectedIds.add(message.id)) {
+        _selectedIds.remove(message.id);
+      }
+    });
+  }
+
+  Future<void> _copyMessages(List<ChatMessage> messages) async {
+    final selected = messages
+        .where((message) => _selectedIds.contains(message.id))
+        .map((message) => message.visibleBody)
+        .where((text) => text.isNotEmpty)
+        .join('\n');
+    if (selected.isNotEmpty) {
+      await Clipboard.setData(ClipboardData(text: selected));
+    }
+    if (mounted) {
+      setState(_selectedIds.clear);
+    }
+  }
+
+  Future<void> _forwardMessages(List<ChatMessage> messages) async {
+    final selected = messages
+        .where((message) => _selectedIds.contains(message.id))
+        .toList();
+    final conversations = await ref.read(conversationsProvider.future);
+    if (!mounted) {
+      return;
+    }
+    final target = await showModalBottomSheet<ConversationSummary>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final conversation in conversations)
+              ListTile(
+                leading: Icon(
+                  conversation.isGroup
+                      ? Icons.group_rounded
+                      : Icons.person_rounded,
+                ),
+                title: Text(conversation.visibleTitle),
+                onTap: () => Navigator.pop(sheetContext, conversation),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (target == null || !mounted) {
+      return;
+    }
+    final success = await ref
+        .read(messageMutationProvider(widget.conversationId).notifier)
+        .forward(selected, target.id);
+    if (success && mounted) {
+      setState(_selectedIds.clear);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(ru: 'Сообщения пересланы.', en: 'Messages forwarded.'),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showMessageActions(
+    ChatMessage message, {
+    required bool isMine,
+    required List<MessageReaction> reactions,
+    required bool pinned,
+  }) async {
+    if (message.isDeleted) {
+      return;
+    }
+    final selectedEmoji = reactions
+        .where(
+          (reaction) =>
+              reaction.messageId == message.id &&
+              reaction.userId == _currentUserId,
+        )
+        .map((reaction) => reaction.emoji)
+        .toSet();
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Wrap(
+                  spacing: AppSpacing.xs,
+                  children: ['👍', '❤️', '😂', '😮', '😢', '🔥']
+                      .map(
+                        (emoji) => ActionChip(
+                          label: Text(emoji),
+                          backgroundColor: selectedEmoji.contains(emoji)
+                              ? AppColors.electricBlueSoft
+                              : null,
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            ref
+                                .read(
+                                  messageMutationProvider(
+                                    widget.conversationId,
+                                  ).notifier,
+                                )
+                                .toggleReaction(
+                                  message: message,
+                                  emoji: emoji,
+                                  selected: selectedEmoji.contains(emoji),
+                                );
+                          },
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.reply_rounded),
+                title: Text(context.tr(ru: 'Ответить', en: 'Reply')),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _startReply(message);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_rounded),
+                title: Text(context.tr(ru: 'Копировать', en: 'Copy')),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Clipboard.setData(ClipboardData(text: message.visibleBody));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.checklist_rounded),
+                title: Text(context.tr(ru: 'Выбрать', en: 'Select')),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _toggleSelection(message);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  pinned ? Icons.push_pin_outlined : Icons.push_pin_rounded,
+                ),
+                title: Text(
+                  pinned
+                      ? context.tr(ru: 'Открепить', en: 'Unpin')
+                      : context.tr(ru: 'Закрепить', en: 'Pin'),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  ref
+                      .read(
+                        messageMutationProvider(widget.conversationId).notifier,
+                      )
+                      .setPinned(message, pinned: !pinned);
+                },
+              ),
+              if (isMine && message.kind == MessageKind.text)
+                ListTile(
+                  leading: const Icon(Icons.edit_rounded),
+                  title: Text(context.tr(ru: 'Изменить', en: 'Edit')),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _startEdit(message);
+                  },
+                ),
+              if (isMine)
+                ListTile(
+                  leading: const Icon(
+                    Icons.delete_forever_outlined,
+                    color: AppColors.danger,
+                  ),
+                  title: Text(
+                    context.tr(ru: 'Удалить у всех', en: 'Delete for everyone'),
+                    style: const TextStyle(color: AppColors.danger),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _confirmDelete(message);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.flag_outlined),
+                title: Text(context.tr(ru: 'Пожаловаться', en: 'Report')),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _reportMessage(message);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(ChatMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          context.tr(ru: 'Удалить у всех?', en: 'Delete for everyone?'),
+        ),
+        content: Text(
+          context.tr(
+            ru: 'Схема поддерживает только глобальный soft-delete. Текст и metadata будут очищены.',
+            en: 'The schema only supports global soft-delete. Text and metadata will be cleared.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.tr(ru: 'Отмена', en: 'Cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(
+              context.tr(ru: 'Удалить', en: 'Delete'),
+              style: const TextStyle(color: AppColors.danger),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await ref
+          .read(messageMutationProvider(widget.conversationId).notifier)
+          .delete(message);
+    }
+  }
+
+  Future<void> _reportMessage(ChatMessage message) async {
+    final reason = TextEditingController();
+    final details = TextEditingController();
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          context.tr(ru: 'Жалоба на сообщение', en: 'Report message'),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: reason,
+              maxLength: 100,
+              decoration: InputDecoration(
+                labelText: context.tr(ru: 'Причина', en: 'Reason'),
+              ),
+            ),
+            TextField(
+              controller: details,
+              maxLines: 3,
+              maxLength: 1000,
+              decoration: InputDecoration(
+                labelText: context.tr(ru: 'Подробности', en: 'Details'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.tr(ru: 'Отмена', en: 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.tr(ru: 'Отправить', en: 'Submit')),
+          ),
+        ],
+      ),
+    );
+    if (submit == true && mounted) {
+      final userId = _currentUserId;
+      if (userId != null) {
+        await ref
+            .read(contactRepositoryProvider)
+            .reportMessage(
+              reporterId: userId,
+              messageId: message.id,
+              reason: reason.text,
+              details: details.text,
+            );
+      }
+    }
+    reason.dispose();
+    details.dispose();
+  }
+
+  Future<void> _searchMessages() async {
+    final controller = TextEditingController();
+    final query = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr(ru: 'Поиск сообщений', en: 'Search messages')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: context.tr(ru: 'Текст сообщения', en: 'Message text'),
+          ),
+          onSubmitted: (value) => Navigator.pop(dialogContext, value),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: Text(context.tr(ru: 'Найти', en: 'Search')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (query == null || query.trim().isEmpty || !mounted) {
+      return;
+    }
+    try {
+      final results = await ref
+          .read(messageRepositoryProvider)
+          .searchMessages(conversationId: widget.conversationId, query: query);
+      if (!mounted) {
+        return;
+      }
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: results.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Text(
+                    context.tr(ru: 'Ничего не найдено.', en: 'No results.'),
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: results.length,
+                  itemBuilder: (context, index) {
+                    final message = results[index];
+                    return ListTile(
+                      leading: const Icon(Icons.search_rounded),
+                      title: Text(
+                        message.visibleBody,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(message.createdAt.toLocal().toString()),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        setState(() => _selectedIds.add(message.id));
+                      },
+                    );
+                  },
+                ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      }
+    }
+  }
+
+  Future<void> _pickAttachment() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const [
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'gif',
+        'heic',
+        'mp4',
+        'mov',
+        'webm',
+        'mp3',
+        'm4a',
+        'aac',
+        'ogg',
+        'wav',
+        'pdf',
+        'zip',
+        '7z',
+        'txt',
+        'csv',
+        'doc',
+        'docx',
+        'xls',
+        'xlsx',
+        'ppt',
+        'pptx',
+      ],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось прочитать выбранный файл.')),
+        );
+      }
+      return;
+    }
+    final mime = _mimeFor(file.extension);
+    final kind = mime.startsWith('image/')
+        ? MessageKind.image
+        : mime.startsWith('video/')
+        ? MessageKind.video
+        : mime.startsWith('audio/')
+        ? MessageKind.audio
+        : MessageKind.file;
+    final success = await ref
+        .read(messageMutationProvider(widget.conversationId).notifier)
+        .uploadAttachment(
+          bytes: bytes,
+          fileName: file.name,
+          mimeType: mime,
+          kind: kind,
+          body: _composerController.text,
+          replyToId: _replyTo?.id,
+        );
+    if (success) {
+      _composerController.clear();
+      ref.invalidate(messageAttachmentsProvider(widget.conversationId));
+    }
+  }
+
+  Future<void> _sendLocation() async {
+    final latitude = TextEditingController();
+    final longitude = TextEditingController();
+    final label = TextEditingController();
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr(ru: 'Геопозиция', en: 'Location')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: latitude,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Latitude'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            TextField(
+              controller: longitude,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(labelText: 'Longitude'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            TextField(
+              controller: label,
+              decoration: InputDecoration(
+                labelText: context.tr(ru: 'Подпись', en: 'Label'),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.tr(ru: 'Отправить', en: 'Send')),
+          ),
+        ],
+      ),
+    );
+    if (submit == true) {
+      final lat = double.tryParse(latitude.text.replaceAll(',', '.'));
+      final lng = double.tryParse(longitude.text.replaceAll(',', '.'));
+      if (lat != null && lng != null) {
+        await ref
+            .read(messageMutationProvider(widget.conversationId).notifier)
+            .sendLocation(latitude: lat, longitude: lng, label: label.text);
+      }
+    }
+    latitude.dispose();
+    longitude.dispose();
+    label.dispose();
+  }
+
+  Future<void> _sendContact() async {
+    final name = TextEditingController();
+    final value = TextEditingController();
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.tr(ru: 'Отправить контакт', en: 'Send contact')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: name,
+              decoration: InputDecoration(
+                labelText: context.tr(ru: 'Имя', en: 'Name'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            TextField(
+              controller: value,
+              decoration: InputDecoration(
+                labelText: context.tr(
+                  ru: 'Телефон или email',
+                  en: 'Phone or email',
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.tr(ru: 'Отправить', en: 'Send')),
+          ),
+        ],
+      ),
+    );
+    if (submit == true) {
+      await ref
+          .read(messageMutationProvider(widget.conversationId).notifier)
+          .sendContact(name: name.text, value: value.text);
+    }
+    name.dispose();
+    value.dispose();
+  }
+
+  Future<void> _createPoll() async {
+    final question = TextEditingController();
+    final options = [TextEditingController(), TextEditingController()];
+    var allowMultiple = false;
+    var anonymous = false;
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(context.tr(ru: 'Новый опрос', en: 'New poll')),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: question,
+                  maxLength: 1000,
+                  decoration: InputDecoration(
+                    labelText: context.tr(ru: 'Вопрос', en: 'Question'),
+                  ),
+                ),
+                for (var index = 0; index < options.length; index++) ...[
+                  TextField(
+                    controller: options[index],
+                    maxLength: 500,
+                    decoration: InputDecoration(
+                      labelText:
+                          '${context.tr(ru: 'Вариант', en: 'Option')} ${index + 1}',
+                    ),
+                  ),
+                ],
+                if (options.length < 20)
+                  TextButton.icon(
+                    onPressed: () => setDialogState(
+                      () => options.add(TextEditingController()),
+                    ),
+                    icon: const Icon(Icons.add_rounded),
+                    label: Text(
+                      context.tr(ru: 'Добавить вариант', en: 'Add option'),
+                    ),
+                  ),
+                SwitchListTile.adaptive(
+                  value: allowMultiple,
+                  onChanged: (value) =>
+                      setDialogState(() => allowMultiple = value),
+                  title: Text(
+                    context.tr(ru: 'Несколько ответов', en: 'Multiple answers'),
+                  ),
+                ),
+                SwitchListTile.adaptive(
+                  value: anonymous,
+                  onChanged: (value) => setDialogState(() => anonymous = value),
+                  title: Text(
+                    context.tr(ru: 'Анонимный опрос', en: 'Anonymous poll'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(context.tr(ru: 'Создать', en: 'Create')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (submit == true && question.text.trim().isNotEmpty) {
+      final values = options
+          .map((controller) => controller.text.trim())
+          .where((value) => value.isNotEmpty)
+          .toList();
+      if (values.length >= 2) {
+        await ref
+            .read(pollMutationProvider(widget.conversationId).notifier)
+            .create(
+              question: question.text,
+              options: values,
+              allowMultiple: allowMultiple,
+              maxSelections: allowMultiple ? values.length : 1,
+              isAnonymous: anonymous,
+            );
+      }
+    }
+    question.dispose();
+    for (final controller in options) {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _toggleRecording() async {
+    if (!_recording) {
+      try {
+        await _voiceRecorder.start();
+        if (mounted) {
+          setState(() => _recording = true);
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
+        }
+      }
+      return;
+    }
+    final recording = await _voiceRecorder.stop();
+    if (mounted) {
+      setState(() => _recording = false);
+    }
+    if (recording == null) {
+      return;
+    }
+    final success = await ref
+        .read(messageMutationProvider(widget.conversationId).notifier)
+        .uploadAttachment(
+          bytes: recording.bytes,
+          fileName: recording.fileName,
+          mimeType: 'audio/mp4',
+          kind: MessageKind.voice,
+          durationMs: recording.duration.inMilliseconds,
+          replyToId: _replyTo?.id,
+        );
+    if (success) {
+      ref.invalidate(messageAttachmentsProvider(widget.conversationId));
+    }
+  }
+
+  Future<void> _showConversationMenu() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            if (widget.isGroup)
+              ListTile(
+                leading: const Icon(Icons.groups_rounded),
+                title: Text(
+                  context.tr(ru: 'Управление группой', en: 'Manage group'),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  context.push('/group/${widget.conversationId}');
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.search_rounded),
+              title: Text(context.tr(ru: 'Поиск', en: 'Search')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _searchMessages();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.flag_outlined),
+              title: Text(
+                context.tr(ru: 'Пожаловаться на чат', en: 'Report chat'),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _reportConversation();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.schedule_send_outlined),
+              title: Text(
+                context.tr(
+                  ru: 'Отложенная отправка / автоудаление',
+                  en: 'Scheduled send / auto-delete',
+                ),
+              ),
+              subtitle: Text(
+                context.tr(
+                  ru: 'Локальный placeholder: в schema нет полей/RPC.',
+                  en: 'Local placeholder: the schema has no fields/RPC.',
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      context.tr(
+                        ru: 'Функция не отправляет fake success и ждёт backend-контракт.',
+                        en: 'No fake success is sent; this awaits a backend contract.',
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _reportConversation() async {
+    final reason = TextEditingController();
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          context.tr(ru: 'Жалоба на беседу', en: 'Report conversation'),
+        ),
+        content: TextField(
+          controller: reason,
+          maxLength: 100,
+          decoration: InputDecoration(
+            labelText: context.tr(ru: 'Причина', en: 'Reason'),
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.tr(ru: 'Отправить', en: 'Submit')),
+          ),
+        ],
+      ),
+    );
+    if (submit == true) {
+      final userId = _currentUserId;
+      if (userId != null) {
+        await ref
+            .read(contactRepositoryProvider)
+            .reportConversation(
+              reporterId: userId,
+              conversationId: widget.conversationId,
+              reason: reason.text,
+            );
+      }
+    }
+    reason.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final messageState = ref.watch(messagesProvider(widget.conversationId));
+    final mutationState = ref.watch(
+      messageMutationProvider(widget.conversationId),
+    );
+    final typingUsers =
+        ref.watch(typingUsersProvider(widget.conversationId)).valueOrNull ??
+        const <String>{};
+    final currentUserId = ref.watch(currentUserProvider)?.id;
+    final reactions =
+        ref
+            .watch(messageReactionsProvider(widget.conversationId))
+            .valueOrNull ??
+        const <MessageReaction>[];
+    final receipts =
+        ref.watch(readReceiptsProvider(widget.conversationId)).valueOrNull ??
+        const <ConversationReadReceipt>[];
+    final pinnedIds =
+        ref
+            .watch(pinnedMessageIdsProvider(widget.conversationId))
+            .valueOrNull ??
+        const <String>{};
+    final attachments =
+        ref
+            .watch(messageAttachmentsProvider(widget.conversationId))
+            .valueOrNull ??
+        const <String, MessageAttachment>{};
+    final polls =
+        ref
+            .watch(conversationPollsProvider(widget.conversationId))
+            .valueOrNull ??
+        const <String, PollDetails>{};
+    _loadDraft(ref.watch(conversationsProvider).valueOrNull);
+
+    ref.listen<AsyncValue<List<ChatMessage>>>(
+      messagesProvider(widget.conversationId),
+      (previous, next) {
+        final messages = next.valueOrNull;
+        if (messages != null && messages.isNotEmpty) {
+          unawaited(_markRead(messages));
+          if (previous?.valueOrNull?.length != messages.length) {
+            ref.invalidate(messageAttachmentsProvider(widget.conversationId));
+            ref.invalidate(conversationPollsProvider(widget.conversationId));
+          }
+        }
+      },
+    );
+    ref.listen<AsyncValue<void>>(
+      messageMutationProvider(widget.conversationId),
+      (previous, next) {
+        if (next.hasError && previous?.error != next.error) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(errorMessage(next.error!))));
+        }
+      },
+    );
+    ref.listen<AsyncValue<void>>(pollMutationProvider(widget.conversationId), (
+      previous,
+      next,
+    ) {
+      if (next.hasError && previous?.error != next.error) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage(next.error!))));
+      }
+    });
+
+    final selecting = _selectedIds.isNotEmpty;
+    final messages = messageState.valueOrNull ?? const <ChatMessage>[];
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 0,
+        leading: selecting
+            ? IconButton(
+                onPressed: () => setState(_selectedIds.clear),
+                icon: const Icon(Icons.close_rounded),
+              )
+            : null,
+        title: selecting
+            ? Text('${_selectedIds.length}')
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title?.trim().isNotEmpty == true
+                        ? widget.title!
+                        : context.tr(ru: 'Беседа', en: 'Conversation'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Text(
+                    typingUsers.isNotEmpty
+                        ? context.tr(ru: 'печатает…', en: 'typing…')
+                        : context.tr(ru: 'в Вайбе', en: 'on Vibe'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: typingUsers.isNotEmpty
+                          ? AppColors.electricBlue
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
+        actions: selecting
+            ? [
+                IconButton(
+                  onPressed: () => _copyMessages(messages),
+                  icon: const Icon(Icons.copy_rounded),
+                  tooltip: context.tr(ru: 'Копировать', en: 'Copy'),
+                ),
+                IconButton(
+                  onPressed: () => _forwardMessages(messages),
+                  icon: const Icon(Icons.forward_rounded),
+                  tooltip: context.tr(ru: 'Переслать', en: 'Forward'),
+                ),
+              ]
+            : [
+                IconButton(
+                  onPressed: _searchMessages,
+                  icon: const Icon(Icons.search_rounded),
+                  tooltip: context.tr(ru: 'Поиск', en: 'Search'),
+                ),
+                IconButton(
+                  onPressed: _showConversationMenu,
+                  icon: const Icon(Icons.more_vert_rounded),
+                ),
+              ],
+      ),
+      body: Column(
+        children: [
+          if (pinnedIds.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              color: AppColors.electricBlueSoft,
+              child: Text(
+                '${context.tr(ru: 'Закреплено', en: 'Pinned')}: ${pinnedIds.length}',
+              ),
+            ),
+          Expanded(
+            child: AsyncStateView<List<ChatMessage>>(
+              value: messageState,
+              isEmpty: (items) => items.isEmpty,
+              emptyTitle: context.tr(
+                ru: 'Начните разговор',
+                en: 'Start a conversation',
+              ),
+              emptyMessage: context.tr(
+                ru: 'Первое сообщение задаёт настроение.',
+                en: 'The first message sets the tone.',
+              ),
+              onRetry: () =>
+                  ref.invalidate(messagesProvider(widget.conversationId)),
+              dataBuilder: (context, items) {
+                final byId = {for (final message in items) message.id: message};
+                final indexById = {
+                  for (var index = 0; index < items.length; index++)
+                    items[index].id: index,
+                };
+                return ListView.builder(
+                  reverse: true,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final message = items[items.length - 1 - index];
+                    final isMine = message.senderId == currentUserId;
+                    final messageReactions = reactions
+                        .where((reaction) => reaction.messageId == message.id)
+                        .toList();
+                    final read =
+                        isMine &&
+                        receipts.any((receipt) {
+                          if (receipt.userId == currentUserId) {
+                            return false;
+                          }
+                          final marker = receipt.lastReadMessageId;
+                          if (marker != null &&
+                              indexById[marker] != null &&
+                              indexById[message.id] != null) {
+                            return indexById[marker]! >= indexById[message.id]!;
+                          }
+                          return receipt.lastReadAt.isAfter(message.createdAt);
+                        });
+                    return EnhancedMessageBubble(
+                      message: message,
+                      replyMessage: byId[message.replyToId],
+                      attachment: attachments[message.id],
+                      poll: polls[message.id],
+                      isMine: isMine,
+                      selected: _selectedIds.contains(message.id),
+                      isRead: read,
+                      pinned: pinnedIds.contains(message.id),
+                      reactions: messageReactions,
+                      currentUserId: currentUserId,
+                      onTap: selecting
+                          ? () => _toggleSelection(message)
+                          : () {},
+                      onLongPress: () => selecting
+                          ? _toggleSelection(message)
+                          : _showMessageActions(
+                              message,
+                              isMine: isMine,
+                              reactions: reactions,
+                              pinned: pinnedIds.contains(message.id),
+                            ),
+                      onReaction: (emoji) => ref
+                          .read(
+                            messageMutationProvider(
+                              widget.conversationId,
+                            ).notifier,
+                          )
+                          .toggleReaction(
+                            message: message,
+                            emoji: emoji,
+                            selected: messageReactions.any(
+                              (reaction) =>
+                                  reaction.emoji == emoji &&
+                                  reaction.userId == currentUserId,
+                            ),
+                          ),
+                      onVote: (option) {
+                        final poll = polls[message.id];
+                        if (poll != null) {
+                          ref
+                              .read(
+                                pollMutationProvider(
+                                  widget.conversationId,
+                                ).notifier,
+                              )
+                              .vote(poll, option);
+                        }
+                      },
+                      onDownload: (attachment) => ref
+                          .read(messageRepositoryProvider)
+                          .downloadAttachment(attachment),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          MessageComposer(
+            controller: _composerController,
+            focusNode: _composerFocusNode,
+            isSending: mutationState.isLoading,
+            replyTo: _replyTo,
+            editing: _editing,
+            onCancelContext: _clearComposerContext,
+            onChanged: _handleTyping,
+            onSend: _submit,
+            onAttach: _pickAttachment,
+            onLocation: _sendLocation,
+            onContact: _sendContact,
+            onPoll: _createPoll,
+            onVoiceToggle: _toggleRecording,
+            isRecording: _recording,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _mimeFor(String? extension) {
+  return switch (extension?.toLowerCase()) {
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    'webp' => 'image/webp',
+    'gif' => 'image/gif',
+    'heic' => 'image/heic',
+    'mp4' => 'video/mp4',
+    'mov' => 'video/quicktime',
+    'webm' => 'video/webm',
+    'mp3' => 'audio/mpeg',
+    'm4a' => 'audio/mp4',
+    'aac' => 'audio/aac',
+    'ogg' => 'audio/ogg',
+    'wav' => 'audio/wav',
+    'pdf' => 'application/pdf',
+    'zip' => 'application/zip',
+    '7z' => 'application/x-7z-compressed',
+    'txt' => 'text/plain',
+    'csv' => 'text/csv',
+    'doc' => 'application/msword',
+    'docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls' => 'application/vnd.ms-excel',
+    'xlsx' =>
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'ppt' => 'application/vnd.ms-powerpoint',
+    'pptx' =>
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    _ => 'text/plain',
+  };
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
+}
