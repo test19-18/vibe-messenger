@@ -31,6 +31,13 @@ abstract final class AppConfig {
     defaultValue: 'sb_publishable_65s8V94B0rQB_C6FQyZT_Q_13QAltS4',
   );
 
+  // Unique Android callback URI for Supabase confirmation and recovery emails.
+  // The scheme and host must also be allow-listed in Supabase Auth settings.
+  static const authCallbackUrl = String.fromEnvironment(
+    'SUPABASE_AUTH_CALLBACK',
+    defaultValue: 'ru.vibe.messenger://auth/callback',
+  );
+
   static bool get isSupabaseConfigured =>
       supabaseUrl.trim().isNotEmpty && supabaseAnonKey.trim().isNotEmpty;
 

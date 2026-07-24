@@ -17,7 +17,7 @@ final currentUserProvider = Provider<User?>((ref) {
   return session?.user ?? ref.watch(authRepositoryProvider).currentUser;
 });
 
-enum AuthAction { signIn, signUp, resetPassword, signOut }
+enum AuthAction { signIn, signUp, resendConfirmation, resetPassword, signOut }
 
 final authControllerProvider = StateNotifierProvider.autoDispose
     .family<AuthController, AsyncValue<void>, AuthAction>((ref, _) {
@@ -68,6 +68,17 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       state = result;
     }
     return result.hasError ? null : response;
+  }
+
+  Future<bool> resendSignupConfirmation(String email) async {
+    state = const AsyncLoading();
+    final result = await AsyncValue.guard(
+      () => _repository.resendSignupConfirmation(email),
+    );
+    if (mounted) {
+      state = result;
+    }
+    return !result.hasError;
   }
 
   Future<bool> resetPassword(String email) async {

@@ -49,6 +49,10 @@ flutter run \
 
 `tool/configure_android.py` добавляет `RECORD_AUDIO`/`USE_BIOMETRIC`, переводит `MainActivity` на `FlutterFragmentActivity`, настраивает AppCompat launch theme, регистрирует схему ссылок `vibe://` и создаёт native MethodChannel `vibe/screen_protection`. Обработчик включает или снимает Android `FLAG_SECURE`, поэтому защищённые чаты блокируют активные системные screenshots; Dart lifecycle-cover остаётся дополнительной защитой. На реальном Android-устройстве всё равно проверяются runtime permissions, biometric dialog, voice codec и `open_filex` intents.
 
+### Email confirmation и password recovery
+
+Мобильный callback URL: `ru.vibe.messenger://auth/callback`. Он передаётся в sign-up, повторную отправку confirmation email и password reset. В Supabase Dashboard необходимо добавить этот URI в **Authentication → URL Configuration → Additional Redirect URLs**. Если письмо по-прежнему ведёт на localhost, запросите новое письмо из актуального APK: старые ссылки не меняются.
+
 ## Проверки
 
 ```bash
@@ -73,7 +77,7 @@ Workflow `.github/workflows/android.yml` закреплён на Flutter 3.44.8,
 - polls: `polls`, `poll_options`, `poll_votes`, `create_poll`, `get_poll_results`;
 - private buckets: `avatars`, `chat-media`, `voice-messages`.
 
-Клиент не создаёт channels и не содержит UI публичной ленты. Calls, video, E2EE, stories, bots, AI, payments и другие исключённые продуктовые области отсутствуют.
+Клиент не создаёт channels и не содержит UI публичной ленты. Контур личных 1:1 audio/video calls добавлен в исходный код, но требует применения `202607240004_calls.sql` и развёртывания Edge Functions до реального соединения. Group calls, screen share, E2EE, stories, bots, AI, payments и другие исключённые продуктовые области отсутствуют.
 
 ## Структура
 

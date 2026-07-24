@@ -127,6 +127,17 @@ class SettingsHubScreen extends ConsumerWidget {
           SectionCard(
             children: [
               VibeListTile(
+                icon: Icons.phone_in_talk_rounded,
+                iconColor: AppColors.success,
+                title: context.tr(ru: 'Звонки', en: 'Calls'),
+                subtitle: context.tr(
+                  ru: 'История аудио/видеозвонков',
+                  en: 'Audio/video call history',
+                ),
+                onTap: () => context.push('/call-history'),
+              ),
+              const Divider(indent: 70),
+              VibeListTile(
                 icon: Icons.phonelink_lock_rounded,
                 iconColor: AppColors.purple,
                 title: context.tr(ru: 'Блокировка приложения', en: 'App lock'),

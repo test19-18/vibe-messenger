@@ -89,12 +89,31 @@
 
 ## Explicitly excluded
 
-Calls, videoconferencing, screen share, E2EE/secret chats, channels/public feed UI, stories/live, bot platform, Wear OS, AI, payments, gifts and blockchain are not implemented and no placeholder claims success for them.
+Screen share, E2EE/secret chats, channels/public feed UI, stories/live, bot platform, Wear OS, AI, payments, gifts and blockchain are not implemented and no placeholder claims success for them.
+
+## Звонки (1:1 audio/video)
+
+| Функция | Статус | Примечание |
+|---|---|---|
+| 1:1 audio call (outgoing) | Backend-ready | LiveKit Flutter client 2.8.1; `create-call` + `issue-livekit-token` + `call-action` Edge Functions |
+| 1:1 video call (outgoing) | Backend-ready | `VideoTrackRenderer` для local/remote; camera on/off/switch |
+| Incoming call route (foreground) | Backend-ready | Realtime subscription на `calls` table где `callee_id = me` и `state = ringing/created`; `IncomingCallOverlay` показывается над текущим UI |
+| Incoming call (background push) | Firebase-pending | Нет Firebase SDK/google-services.json; foreground realtime watcher работает, background push — нет |
+| Ringing/accept/decline/cancel | Implemented (client) | `CallSessionTransition` pure state machine; все transitions unit-tested |
+| Busy/missed/ended states | Backend-ready | Client обрабатывает terminal states из realtime; server timeout/edge function не деплоилась |
+| LiveKit room connect (after server token) | Implemented (client) | `CallRoomService.connect()` требует `canConnectRoom == true` (token + url + roomName); API secret никогда не в client |
+| Mute/speaker/camera on/off/switch | Implemented (client) | `LocalParticipant.setMicrophoneEnabled/setCameraEnabled`; `AudioManager.setSpeakerOutputPreferred`; `VideoTrack.switchCamera` |
+| Reconnect UI | Implemented (client) | `RoomReconnectingEvent` → `CallStatus.reconnecting` → UI overlay "Переподключение…" |
+| Call duration (live + history) | Implemented (client) | Timer с `acceptedAt`; `CallRecord.displayDurationSeconds` |
+| Call history UI | Backend-ready | `CallHistoryScreen` с `listCallHistory`; batch-resolve peer names; reachable из settings hub и conversation |
+| Native Telecom/ConnectionService | Local placeholder | `TelecomApi` abstraction + `MethodChannel("vibe/telecom")`; `isAvailable` возвращает false; native handler не реализован |
+| Group calls | Excluded | UI отклоняет с explicit message |
+| API secret in client | Excluded | Токен выдаётся Edge Function per-call, short-lived; service-role/LiveKit API secret не в коде |
 
 ## Verification state
 
 - `dart format --output=none --set-exit-if-changed lib test`: проходит на Dart 3.12.2.
 - `flutter analyze --no-pub --fatal-infos --fatal-warnings`: проходит на Flutter 3.44.8.
-- `flutter test --no-pub`: 30 tests проходят, включая новые pure-domain tests для `ScheduledMessage` и расширений `ConversationUserSettings`.
-- `202607240002_product_extensions.sql` прочитана, но SQL и workflow не изменялись.
-- Миграции 001–003 применены к выделенному Supabase-проекту, RLS/realtime extensions проверены, а два Supabase Cron job активны. Android `FLAG_SECURE` host генерируется CI; microphone/biometric/file intents, Firebase push и APK всё ещё требуют проверки сборкой и реальным устройством.
+- `flutter test --no-pub`: 76 tests проходят, включая email redirect и pure-domain tests звонков.
+- Миграция `202607240004_calls.sql` и Edge Function source подготовлены, но не применены/развёрнуты: Supabase MCP connection отключена.
+- Миграции 001–003 применены к выделенному Supabase-проекту, RLS/realtime extensions проверены, а два Supabase Cron job активны. Android `FLAG_SECURE` host генерируется CI; microphone/biometric/file intents, Firebase push, deployed call backend и реальные calls требуют проверки на устройствах.

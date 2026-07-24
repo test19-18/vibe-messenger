@@ -59,9 +59,31 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _emailConfirmationSent = true);
   }
 
+  Future<void> _resendConfirmation() async {
+    final sent = await ref
+        .read(authControllerProvider(AuthAction.resendConfirmation).notifier)
+        .resendSignupConfirmation(_emailController.text);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sent
+              ? 'Новое письмо отправлено. Откройте его на устройстве с «Вайб». '
+                    'Если ссылка снова ведёт на localhost, настройка Supabase ещё не обновлена.'
+              : 'Не удалось повторно отправить письмо. Попробуйте позже.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider(AuthAction.signUp));
+    final resendState = ref.watch(
+      authControllerProvider(AuthAction.resendConfirmation),
+    );
     final backend = ref.watch(backendBootstrapProvider);
     final enabled = backend.isReady && !authState.isLoading;
     final loginLocation = publicAuthLocation('/login', from: widget.from);
@@ -73,10 +95,40 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             'Мы отправили ссылку подтверждения на ${_emailController.text.trim()}.',
         showBack: true,
         backFallbackLocation: loginLocation,
-        child: FilledButton.icon(
-          onPressed: () => context.go(loginLocation),
-          icon: const Icon(Icons.mark_email_read_rounded),
-          label: const Text('Вернуться ко входу'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Ссылка должна открыть установленное приложение «Вайб», а не localhost. '
+              'После изменения настройки Supabase запросите новое письмо.',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (resendState.hasError) ...[
+              Text(
+                errorMessage(resendState.error!),
+                style: const TextStyle(color: AppColors.danger),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+            OutlinedButton.icon(
+              onPressed: resendState.isLoading ? null : _resendConfirmation,
+              icon: resendState.isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+              label: const Text('Отправить письмо ещё раз'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            FilledButton.icon(
+              onPressed: () => context.go(loginLocation),
+              icon: const Icon(Icons.mark_email_read_rounded),
+              label: const Text('Вернуться ко входу'),
+            ),
+          ],
         ),
       );
     }

@@ -149,4 +149,23 @@ Group creation, ownership, invite tokens, invitation acceptance, join review и 
 
 `ScreenProtectionService` зависит от абстракции `ScreenProtectionApi`. После `flutter create` скрипт `tool/configure_android.py` переписывает Kotlin `MainActivity`, регистрирует `MethodChannel("vibe/screen_protection")`, обрабатывает `setProtectedContent(enabled)` и add/clear `WindowManager.LayoutParams.FLAG_SECURE`. Он также добавляет `vibe://` intent-filter; lifecycle privacy cover остаётся дополнительной защитой.
 
+### Calls (1:1 audio/video)
+
+Контур личных звонков построен на LiveKit Flutter client 2.8.1 и Supabase Edge Functions. Клиент никогда не содержит LiveKit API secret — токен выдаётся сервером per-call через Edge Function и short-lived. Подключение к комнате происходит только после получения серверного токена (`CallSession.canConnectRoom`).
+
+**Слои:**
+- **Domain:** `CallStatus` (enum с wire values), `CallType`, `CallSession`, `CallRecord`, `CallSessionTransition` (pure state machine с validated transitions). Все модели immutable с defensive parsing, без codegen.
+- **Data:** `CallRepository` — Supabase Edge Functions (`create-call`, `issue-livekit-token`, `call-action`), `calls` table reads/streams. Token выдаётся только через `issue-livekit-token`, не хранится в БД и не логируется. Realtime subscription на incoming calls (`callee_id = me`, `state = ringing/created`). DB columns `state`/`media_kind` маппятся в UI `CallStatus`/`CallType` defensively.
+- **Services:** `CallRoomService` — LiveKit `Room` lifecycle, `LocalParticipant` track control (mute/camera/switch), `AudioManager` speaker routing, `VideoTrack` retrieval для rendering. `TelecomApi` — абстракция native Core-Telecom (`MethodChannel("vibe/telecom")`), `isAvailable` возвращает false до native реализации.
+- **Providers:** `activeCallProvider` (StateNotifier, single active call), `callInitiationProvider`, `incomingCallActionProvider`, `callHistoryProvider`, `incomingCallsProvider`/`latestIncomingCallProvider` (realtime watcher).
+- **Presentation:** `CallScreen` (full-screen active call с audio/video layout, `VideoTrackRenderer`), `IncomingCallOverlay` (foreground incoming call с accept/decline), `CallHistoryScreen`.
+
+**State machine:** `idle → ringingOutgoing/ringingIncoming → connecting → accepted → completed`. Terminal states: `completed`, `missed`, `declined`, `cancelled`, `busy`, `failed`. `accepted → reconnecting → accepted` для временной потери связи. Все transitions валидируются через `CallSessionTransition.canTransition`.
+
+**UI reachability:** Кнопки audio/video call в `AppBar` conversation screen (только для direct chats, не group). Call history в Settings Hub. Incoming call overlay повёрнут над `AppLockGate` в `app.dart`. Route `/call` — full-screen, `/call-history` — с optional `conversationId` filter.
+
+**Firebase pending:** Foreground realtime watcher работает (Supabase Realtime). Background push для incoming calls требует Firebase SDK — намеренно не добавлен. UI честно показывает, что background push не работает.
+
+**Native telecom:** Android manifest добавил логически нужные permissions (camera, microphone, bluetooth, MODIFY_AUDIO_SETTINGS, BIND_TELECOM_CONNECTION_SERVICE, MANAGE_OWN_CALLS, POST_NOTIFICATIONS). `MainActivity.kt` регистрирует `MethodChannel("vibe/telecom")` с `isAvailable = false` — documented interface, не full implementation. `minSdk` поднят до 24 (требование `livekit_client`).
+
 Точная продуктовая матрица: [`FEATURE_STATUS.md`](FEATURE_STATUS.md).

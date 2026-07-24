@@ -12,6 +12,8 @@ import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../calls/domain/call_models.dart';
+import '../../calls/providers/call_providers.dart';
 import '../../chats/domain/conversation_summary.dart';
 import '../../chats/domain/conversation_user_settings.dart';
 import '../../chats/providers/conversation_providers.dart';
@@ -130,6 +132,58 @@ class _EnhancedConversationScreenState
           );
     } catch (_) {
       // Read receipts are best effort and never block chat rendering.
+    }
+  }
+
+  Future<void> _startCall(
+    BuildContext context,
+    WidgetRef ref,
+    CallType type,
+  ) async {
+    if (widget.isGroup) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              ru: 'Звонки в группе пока не поддерживаются.',
+              en: 'Group calls are not supported yet.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    final userId = _currentUserId;
+    if (userId == null) {
+      return;
+    }
+    final conversations = ref.read(conversationsProvider).valueOrNull;
+    final summary = conversations
+        ?.where((item) => item.id == widget.conversationId)
+        .firstOrNull;
+    final calleeId = summary?.peer?.id;
+    if (calleeId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              ru: 'Не удалось определить собеседника.',
+              en: 'Could not identify the call recipient.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    final success = await ref
+        .read(callInitiationProvider.notifier)
+        .startCall(
+          conversationId: widget.conversationId,
+          calleeId: calleeId,
+          type: type,
+        );
+    if (success && context.mounted) {
+      context.push('/call');
     }
   }
 
@@ -1538,6 +1592,16 @@ class _EnhancedConversationScreenState
                 ),
               ]
             : [
+                IconButton(
+                  onPressed: () => _startCall(context, ref, CallType.audio),
+                  icon: const Icon(Icons.phone_rounded),
+                  tooltip: context.tr(ru: 'Аудиозвонок', en: 'Audio call'),
+                ),
+                IconButton(
+                  onPressed: () => _startCall(context, ref, CallType.video),
+                  icon: const Icon(Icons.videocam_rounded),
+                  tooltip: context.tr(ru: 'Видеозвонок', en: 'Video call'),
+                ),
                 IconButton(
                   onPressed: _searchMessages,
                   icon: const Icon(Icons.search_rounded),

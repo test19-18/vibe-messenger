@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/errors/error_message.dart';
 
 class AuthRepository {
@@ -45,12 +46,24 @@ class AuthRepository {
     return _requiredClient.auth.signUp(
       email: email.trim(),
       password: password,
+      emailRedirectTo: AppConfig.authCallbackUrl,
       data: {'full_name': displayName.trim()},
     );
   }
 
   Future<void> resetPassword(String email) {
-    return _requiredClient.auth.resetPasswordForEmail(email.trim());
+    return _requiredClient.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: AppConfig.authCallbackUrl,
+    );
+  }
+
+  Future<void> resendSignupConfirmation(String email) async {
+    await _requiredClient.auth.resend(
+      type: OtpType.signup,
+      email: email.trim(),
+      emailRedirectTo: AppConfig.authCallbackUrl,
+    );
   }
 
   Future<void> signOut() => _requiredClient.auth.signOut();

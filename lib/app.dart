@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/calls/presentation/incoming_call_overlay.dart';
 import 'features/security/presentation/app_lock_gate.dart';
 import 'features/settings/domain/app_preferences.dart';
 import 'features/settings/providers/presence_providers.dart';
@@ -44,7 +45,9 @@ class VibeApp extends ConsumerWidget {
           data: mediaQuery,
           child: TickerMode(
             enabled: !preferences.reduceMotion,
-            child: AppLockGate(child: child ?? const SizedBox.shrink()),
+            child: IncomingCallOverlay(
+              child: AppLockGate(child: child ?? const SizedBox.shrink()),
+            ),
           ),
         );
       },

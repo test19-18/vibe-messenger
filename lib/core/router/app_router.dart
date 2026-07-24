@@ -8,6 +8,8 @@ import '../../features/auth/presentation/login_screen.dart';
 import '../../features/auth/presentation/register_screen.dart';
 import '../../features/auth/presentation/reset_password_screen.dart';
 import '../../features/auth/providers/auth_providers.dart';
+import '../../features/calls/presentation/call_history_screen.dart';
+import '../../features/calls/presentation/call_screen.dart';
 import '../../features/chat/presentation/enhanced_conversation_screen.dart';
 import '../../features/chats/presentation/chats_hub_screen.dart';
 import '../../features/contacts/presentation/contacts_hub_screen.dart';
@@ -180,6 +182,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             isGroup: state.uri.queryParameters['group'] == 'true',
           );
         },
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        name: 'call',
+        path: '/call',
+        builder: (context, state) => const CallScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        name: 'call-history',
+        path: '/call-history',
+        builder: (context, state) => CallHistoryScreen(
+          conversationId: state.uri.queryParameters['conversationId'],
+        ),
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
