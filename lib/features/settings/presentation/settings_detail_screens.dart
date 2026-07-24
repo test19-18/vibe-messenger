@@ -8,11 +8,11 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../notifications/providers/notifications_provider.dart';
 import '../../security/providers/app_lock_providers.dart';
 import '../domain/app_preferences.dart';
 import '../domain/user_device.dart';
 import '../providers/device_providers.dart';
-import '../providers/settings_providers.dart';
 
 class AppearanceSettingsScreen extends ConsumerWidget {
   const AppearanceSettingsScreen({super.key});
@@ -230,9 +230,19 @@ class NotificationSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final preferences =
         ref.watch(appPreferencesProvider).valueOrNull ?? const AppPreferences();
+    final pushState = ref.watch(notificationsProvider);
+    final userId = ref.watch(currentUserProvider)?.id;
     void save(AppPreferences value) {
       ref.read(appPreferencesProvider.notifier).save(value);
+      // If push was toggled, update the notifications controller.
+      if (value.pushEnabled != preferences.pushEnabled) {
+        ref
+            .read(notificationsProvider.notifier)
+            .setPushEnabled(enabled: value.pushEnabled, userId: userId);
+      }
     }
+
+    final firebaseReady = pushState.firebaseReady;
 
     return Scaffold(
       appBar: AppBar(
@@ -241,18 +251,53 @@ class NotificationSettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.md),
         children: [
+          // Firebase status banner — honest state.
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.warning.withValues(alpha: 0.12),
+              color: firebaseReady
+                  ? AppColors.success.withValues(alpha: 0.12)
+                  : AppColors.warning.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(AppRadii.md),
-              border: Border.all(color: AppColors.warning),
-            ),
-            child: Text(
-              context.tr(
-                ru: 'Настройки синхронизируются с backend. Доставка push и получение FCM token ожидают Firebase SDK/google-services.json.',
-                en: 'Settings sync with the backend. Push delivery and FCM token acquisition require Firebase SDK/google-services.json.',
+              border: Border.all(
+                color: firebaseReady ? AppColors.success : AppColors.warning,
               ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  firebaseReady
+                      ? Icons.cloud_done_rounded
+                      : Icons.cloud_off_rounded,
+                  color: firebaseReady ? AppColors.success : AppColors.warning,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        firebaseReady
+                            ? context.tr(
+                                ru: 'Firebase подключён',
+                                en: 'Firebase connected',
+                              )
+                            : context.tr(
+                                ru: 'Firebase ожидает настройки',
+                                en: 'Firebase pending setup',
+                              ),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        pushState.statusLabel,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -260,16 +305,25 @@ class NotificationSettingsScreen extends ConsumerWidget {
             children: [
               SwitchListTile.adaptive(
                 value: preferences.pushEnabled,
-                onChanged: (value) =>
-                    save(preferences.copyWith(pushEnabled: value)),
+                onChanged: firebaseReady
+                    ? (value) => save(preferences.copyWith(pushEnabled: value))
+                    : null,
                 title: Text(
                   context.tr(ru: 'Push-уведомления', en: 'Push notifications'),
                 ),
+                subtitle: firebaseReady
+                    ? null
+                    : Text(
+                        context.tr(
+                          ru: 'Требует google-services.json',
+                          en: 'Requires google-services.json',
+                        ),
+                      ),
               ),
               const Divider(indent: 16),
               SwitchListTile.adaptive(
                 value: preferences.pushMessagePreview,
-                onChanged: preferences.pushEnabled
+                onChanged: preferences.pushEnabled && firebaseReady
                     ? (value) =>
                           save(preferences.copyWith(pushMessagePreview: value))
                     : null,
@@ -282,6 +336,101 @@ class NotificationSettingsScreen extends ConsumerWidget {
               ),
             ],
           ),
+          if (firebaseReady) ...[
+            const SizedBox(height: AppSpacing.md),
+            SectionCard(
+              children: [
+                ListTile(
+                  leading: Icon(
+                    pushState.notificationPermissionGranted
+                        ? Icons.notifications_active_rounded
+                        : Icons.notifications_off_rounded,
+                    color: pushState.notificationPermissionGranted
+                        ? AppColors.success
+                        : AppColors.warning,
+                  ),
+                  title: Text(
+                    context.tr(
+                      ru: 'Разрешение системы',
+                      en: 'System permission',
+                    ),
+                  ),
+                  subtitle: Text(
+                    pushState.notificationPermissionGranted
+                        ? context.tr(
+                            ru: 'Уведомления разрешены',
+                            en: 'Notifications permitted',
+                          )
+                        : context.tr(
+                            ru: 'Нажмите, чтобы предоставить разрешение',
+                            en: 'Tap to grant permission',
+                          ),
+                  ),
+                  trailing: pushState.notificationPermissionGranted
+                      ? const Icon(
+                          Icons.check_circle_rounded,
+                          color: AppColors.success,
+                        )
+                      : FilledButton.tonal(
+                          onPressed: () async {
+                            final granted = await ref
+                                .read(notificationsProvider.notifier)
+                                .requestNotificationPermission();
+                            if (!granted && context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    context.tr(
+                                      ru:
+                                          'Разрешение не предоставлено. '
+                                          'Проверьте настройки системы.',
+                                      en:
+                                          'Permission not granted. '
+                                          'Check system settings.',
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          child: Text(context.tr(ru: 'Разрешить', en: 'Allow')),
+                        ),
+                ),
+                const Divider(indent: 56),
+                ListTile(
+                  leading: const Icon(Icons.devices_rounded),
+                  title: Text(
+                    context.tr(
+                      ru: 'Регистрация устройства',
+                      en: 'Device registration',
+                    ),
+                  ),
+                  subtitle: Text(
+                    pushState.deviceRegistered
+                        ? context.tr(
+                            ru: 'Устройство зарегистрировано для push',
+                            en: 'Device registered for push',
+                          )
+                        : pushState.fcmToken != null
+                        ? context.tr(
+                            ru: 'FCM token получен, регистрация…',
+                            en: 'FCM token acquired, registering…',
+                          )
+                        : context.tr(
+                            ru: 'FCM token не получен',
+                            en: 'FCM token not acquired',
+                          ),
+                  ),
+                  trailing: pushState.deviceRegistered
+                      ? const Icon(
+                          Icons.check_circle_rounded,
+                          color: AppColors.success,
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

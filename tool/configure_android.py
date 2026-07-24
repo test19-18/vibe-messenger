@@ -129,6 +129,24 @@ def main() -> int:
         lines.append(
             "    <uses-permission android:name=\"android.permission.RECORD_AUDIO\" />"
         )
+    for permission in (
+        "android.permission.CAMERA",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.BIND_TELECOM_CONNECTION_SERVICE",
+        "android.permission.MANAGE_OWN_CALLS",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+    ):
+        if permission not in source:
+            lines.append(f"    <uses-permission android:name=\"{permission}\" />")
+    if "android.permission.BLUETOOTH\" android:maxSdkVersion=\"30" not in source:
+        lines.append(
+            "    <uses-permission android:name=\"android.permission.BLUETOOTH\" android:maxSdkVersion=\"30\" />"
+        )
     if lines:
         marker = source.find(">") + 1
         source = source[:marker] + "\n" + "\n".join(lines) + source[marker:]

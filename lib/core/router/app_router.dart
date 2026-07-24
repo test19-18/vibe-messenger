@@ -17,6 +17,7 @@ import '../../features/groups/presentation/create_group_screen.dart';
 import '../../features/groups/presentation/group_access_screen.dart';
 import '../../features/groups/presentation/group_details_screen.dart';
 import '../../features/navigation/presentation/app_shell.dart';
+import '../../features/notifications/providers/notifications_provider.dart';
 import '../../features/profile/presentation/profile_qr_screen.dart';
 import '../../features/profile/presentation/profile_screen.dart';
 import '../../features/settings/presentation/settings_detail_screens.dart';
@@ -212,12 +213,44 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ),
   );
 
+  // Subscribe to push events (notification taps) and navigate accordingly.
+  // This bridges the notifications feature to the router without tight
+  // coupling — the notifications provider emits events, the router reacts.
+  final pushStream = ref.watch(pushEventControllerProvider).events;
+  StreamSubscription<PushEvent>? pushSub;
+  pushSub = pushStream.listen((event) {
+    _handlePushEvent(event, router);
+  });
+
   ref.onDispose(() {
     router.dispose();
     refreshNotifier.dispose();
+    pushSub?.cancel();
   });
+
   return router;
 });
+
+/// Handles a push event by navigating to the appropriate screen.
+///
+/// Only navigation-type events are handled here (openConversation, openCall).
+/// incomingCall and callCancelled events are consumed by the call providers,
+/// not the router.
+void _handlePushEvent(PushEvent event, GoRouter router) {
+  switch (event.type) {
+    case PushEventType.openConversation:
+      final conversationId = event.conversationId;
+      if (conversationId != null && conversationId.isNotEmpty) {
+        router.push('/conversation/$conversationId');
+      }
+    case PushEventType.openCall:
+      router.push('/call');
+    case PushEventType.incomingCall:
+    case PushEventType.callCancelled:
+      // These are consumed by the call providers, not the router.
+      break;
+  }
+}
 
 class RouterRefreshNotifier extends ChangeNotifier {
   RouterRefreshNotifier(Stream<Object?> stream) {

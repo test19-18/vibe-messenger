@@ -12,6 +12,8 @@ coverage/
 android/.gradle/
 android/local.properties
 android/key.properties
+# Firebase Android app configuration is provided through a secure build secret.
+android/app/google-services.json
 *.jks
 *.keystore
 

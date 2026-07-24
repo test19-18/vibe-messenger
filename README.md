@@ -24,7 +24,8 @@ Flutter-мессенджер с Supabase backend и отдельным визу�
 - polls: create RPC, vote/unvote и агрегированные результаты RPC;
 - настройки: system/light/dark, RU/EN для основной навигации и новых экранов, text scale, animations/power-saving;
 - локальный PIN hash и biometric gate через `shared_preferences` + `local_auth`;
-- `user_devices` repository/UI и notification preferences без Firebase SDK.
+- `user_devices` repository/UI и notification preferences;
+- FCM push-уведомления: safe Firebase init (pending state без `google-services.json`), FCM token registration в `call_devices` через `register_call_device` RPC, foreground handling через `flutter_local_notifications` с отдельными каналами для сообщений и входящих звонков, background handler top-level без UI доступа, push→router и push→call event bus.
 
 Полная честная матрица статусов и ограничений: [`docs/FEATURE_STATUS.md`](docs/FEATURE_STATUS.md).
 
@@ -52,6 +53,12 @@ flutter run \
 ### Email confirmation и password recovery
 
 Мобильный callback URL: `ru.vibe.messenger://auth/callback`. Он передаётся в sign-up, повторную отправку confirmation email и password reset. В Supabase Dashboard необходимо добавить этот URI в **Authentication → URL Configuration → Additional Redirect URLs**. Если письмо по-прежнему ведёт на localhost, запросите новое письмо из актуального APK: старые ссылки не меняются.
+
+### Firebase Cloud Messaging (push-уведомления)
+
+Android-конфигурация Firebase (`google-services.json`) — gitignored, предоставляется как build secret. Без неё приложение запускается в безопасном Firebase-pending режиме: UI показывает честный статус, push не работает, crash-нет. Полная инструкция по server-side FCM credentials: [`FIREBASE_SETUP.md`](FIREBASE_SETUP.md).
+
+Клиент не содержит service-account credentials. Service account JSON добавляется **только** как Supabase Edge Function secret `FIREBASE_SERVICE_ACCOUNT_JSON` и никогда не коммитится.
 
 ## Проверки
 
@@ -93,6 +100,7 @@ lib/
     groups/             # roles, members, invites, requests, moderation
     security/           # local PIN/biometric gate
     settings/           # preferences, presence, devices, detail screens
+    notifications/      # FCM push: services, repository, providers, payload parsing
 ```
 
-Архитектура: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Правила изменений: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Архитектура: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Правила изменений: [`CONTRIBUTING.md`](CONTRIBUTING.md). Firebase server-side FCM setup: [`FIREBASE_SETUP.md`](FIREBASE_SETUP.md).

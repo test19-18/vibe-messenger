@@ -66,6 +66,22 @@ jobs:
       - name: Configure voice and biometric Android host
         run: python3 tool/configure_android.py .
 
+      - name: Configure Firebase Android host
+        run: python3 tool/configure_firebase_android.py .
+
+      - name: Materialize Firebase Android config
+        env:
+          FIREBASE_GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.FIREBASE_GOOGLE_SERVICES_JSON_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${FIREBASE_GOOGLE_SERVICES_JSON_BASE64:-}" ]]; then
+            echo 'Missing required GitHub secret FIREBASE_GOOGLE_SERVICES_JSON_BASE64' >&2
+            exit 1
+          fi
+          printf '%s' "$FIREBASE_GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json
+          chmod 600 android/app/google-services.json
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:

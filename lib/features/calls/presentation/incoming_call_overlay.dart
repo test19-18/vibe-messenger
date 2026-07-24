@@ -10,11 +10,12 @@ import '../providers/call_providers.dart';
 /// Incoming call overlay shown when a ringing call is detected.
 ///
 /// This is a full-screen overlay that appears over the current content
-/// when [latestIncomingCallProvider] emits a ringing call. It provides
-/// Accept and Decline buttons.
+/// when an incoming call is detected — either via the realtime watcher
+/// ([latestIncomingCallProvider]) or via an FCM push payload
+/// ([pushIncomingCallProvider]). It provides Accept and Decline buttons.
 ///
-/// **Note:** This only works in the foreground. Background incoming call
-/// notifications require Firebase push, which is not yet configured.
+/// **Note:** Background incoming call notifications are delivered via FCM.
+/// The foreground case is handled here via both realtime and push sources.
 class IncomingCallOverlay extends ConsumerWidget {
   const IncomingCallOverlay({super.key, required this.child});
 
@@ -22,8 +23,13 @@ class IncomingCallOverlay extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final incomingCall = ref.watch(latestIncomingCallProvider);
+    // Check both the realtime watcher and the push-driven source.
+    final realtimeCall = ref.watch(latestIncomingCallProvider);
+    final pushCall = ref.watch(pushIncomingCallProvider);
     final activeCall = ref.watch(activeCallProvider).valueOrNull;
+
+    // Prefer the realtime call (has full DB data); fall back to push call.
+    final incomingCall = realtimeCall ?? pushCall;
 
     // Only show the overlay if there's a ringing incoming call
     // and no active call in progress.

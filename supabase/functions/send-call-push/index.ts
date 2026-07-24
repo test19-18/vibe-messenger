@@ -89,7 +89,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
     calleeId?: string;
     roomName?: string;
     callerName?: string;
+    callerId?: string;
     mediaKind?: string;
+    conversationId?: string;
   };
   try {
     body = await req.json();
@@ -101,7 +103,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const calleeId = body.calleeId;
   const roomName = body.roomName;
   const callerName = body.callerName ?? "Unknown";
+  const callerId = body.callerId ?? user.id;
   const mediaKind = body.mediaKind === "video" ? "video" : "audio";
+  const conversationId = body.conversationId ?? null;
 
   if (!callId || !calleeId || !roomName) {
     return json({ error: "callId, calleeId, and roomName are required" }, 400);
@@ -151,13 +155,17 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }, 200);
   }
 
-  // Build the push payload
+  // Build the push payload — data-only message so the client retains full
+  // control over UI presentation and call lifecycle. The `type` field
+  // identifies the payload contract the client parses.
   const pushPayload = {
     call_id: callId,
     room_name: roomName,
     caller_name: callerName,
+    caller_id: callerId,
     media_kind: mediaKind,
     type: "incoming_call",
+    ...(conversationId ? { conversation_id: conversationId } : {}),
   };
 
   // Check if Firebase is configured
@@ -289,8 +297,10 @@ Deno.serve(async (req: Request): Promise<Response> => {
             call_id: callId,
             room_name: roomName,
             caller_name: callerName,
+            caller_id: callerId,
             media_kind: mediaKind,
             type: "incoming_call",
+            ...(conversationId ? { conversation_id: conversationId } : {}),
           },
           android: {
             priority: "high",
@@ -298,7 +308,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
               title: `Incoming ${mediaKind} call`,
               body: `${callerName} is calling`,
               click_action: "CALL_INVITE",
-              channel_id: "call_notifications",
+              channel_id: "vibe_incoming_calls",
             },
           },
           apns: {

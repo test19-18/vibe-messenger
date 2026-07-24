@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../core/errors/error_message.dart';
 import '../../../core/providers/backend_providers.dart';
 import '../../auth/providers/auth_providers.dart';
+import '../../notifications/providers/notifications_provider.dart';
 import '../../profile/providers/profile_providers.dart';
 import '../data/call_repository.dart';
 import '../domain/call_models.dart';
@@ -73,6 +74,73 @@ final latestIncomingCallProvider = Provider.autoDispose<CallSession?>((ref) {
   // Return the most recent ringing call.
   return calls.reduce((a, b) => a.createdAt.isAfter(b.createdAt) ? a : b);
 });
+
+// ---------------------------------------------------------------------------
+// Push-driven incoming call provider
+// ---------------------------------------------------------------------------
+
+/// A push-driven incoming call session, constructed from an FCM
+/// `incoming_call` payload.
+///
+/// When the app is in the foreground and an FCM `incoming_call` payload
+/// arrives, this provider synthesizes a [CallSession] in
+/// [CallStatus.ringingIncoming] state. The [IncomingCallOverlay] picks
+/// this up alongside [latestIncomingCallProvider] and shows the incoming
+/// call UI even if the realtime watcher hasn't received the DB row yet.
+///
+/// When a `call_cancelled` payload arrives, this provider clears the
+/// session, dismissing the overlay.
+final pushIncomingCallProvider =
+    StateNotifierProvider.autoDispose<PushIncomingCallController, CallSession?>(
+      (ref) {
+        final controller = PushIncomingCallController();
+        final pushEvents = ref.watch(pushEventControllerProvider).events;
+        final sub = pushEvents.listen((event) {
+          controller.handlePushEvent(event);
+        });
+        ref.onDispose(sub.cancel);
+        return controller;
+      },
+    );
+
+/// Controller that converts push events into [CallSession] state.
+class PushIncomingCallController extends StateNotifier<CallSession?> {
+  PushIncomingCallController() : super(null);
+
+  void handlePushEvent(PushEvent event) {
+    switch (event.type) {
+      case PushEventType.incomingCall:
+        if (event.callId == null || event.roomName == null) {
+          return;
+        }
+        final session = CallSession(
+          id: event.callId!,
+          conversationId: event.conversationId ?? '',
+          callerId: event.callerId ?? '',
+          calleeId: '',
+          type: event.isVideo == true ? CallType.video : CallType.audio,
+          status: CallStatus.ringingIncoming,
+          createdAt: DateTime.now(),
+          roomName: event.roomName,
+        );
+        state = session;
+      case PushEventType.callCancelled:
+        // Clear the push-driven incoming call if the cancelled callId matches.
+        final current = state;
+        if (current != null && event.callId == current.id) {
+          state = null;
+        }
+      case PushEventType.openConversation:
+      case PushEventType.openCall:
+        // Navigation events are handled by the router, not here.
+        break;
+    }
+  }
+
+  void clear() {
+    state = null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Active call controller

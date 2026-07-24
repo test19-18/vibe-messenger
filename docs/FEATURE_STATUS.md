@@ -82,9 +82,17 @@
 | Local PIN lock | Implemented | salted SHA-256 hash in SharedPreferences; not a secure keystore |
 | Biometric lock | Implemented | `local_auth`; native/device verification required |
 | Registered devices UI | Implemented | list/disable/remove `user_devices` |
-| Device token repository | Backend-ready | `register_device` RPC implemented |
-| Push preference | Implemented | `user_settings` fields |
-| FCM token acquisition/delivery | Firebase-pending | no Firebase SDK, no `google-services.json` |
+| Device token repository | Implemented | `register_device` RPC for `user_devices`; `register_call_device` RPC for `call_devices` |
+| Push preference | Implemented | `user_settings` fields; toggling calls `NotificationsController.setPushEnabled` |
+| FCM token acquisition/delivery | Implemented (client) | `FcmService` wraps `firebase_messaging`; safe init returns `FirebaseInitResult.pending` when `google-services.json` absent |
+| FCM token registration in `call_devices` | Implemented | `NotificationsRepository.registerCallDevice` via `register_call_device` RPC under RLS |
+| Foreground message handling | Implemented | `flutter_local_notifications` with separate channels: `vibe_messages` (high) + `vibe_incoming_calls` (max/full-screen) |
+| FCM data payload parsing | Implemented | `FcmPayload.fromData` parses `message`, `incoming_call`, `call_cancelled`; defensive, pure, unit-tested |
+| Background FCM handler | Implemented | Top-level `backgroundFcmHandler` with `@pragma('vm:entry-point')`; no UI access |
+| Push → router navigation | Implemented | `PushEventController` event bus; router listens for `openConversation`/`openCall` events |
+| Push → call providers | Implemented | `pushIncomingCallProvider` synthesizes `CallSession` from FCM `incoming_call`; `call_cancelled` dismisses overlay |
+| POST_NOTIFICATIONS permission | Implemented | `permission_handler` + `flutter_local_notifications` request flow; settings UI shows honest granted/denied state |
+| Firebase service-account credentials in client | Excluded | Service account JSON is only a Supabase Edge Function secret (`FIREBASE_SERVICE_ACCOUNT_JSON`); never in mobile build |
 | All Supabase Auth sessions list/revoke | Backend-ready/server-required | mobile client shows current session only; admin/session management needs trusted backend |
 
 ## Explicitly excluded
@@ -98,7 +106,7 @@ Screen share, E2EE/secret chats, channels/public feed UI, stories/live, bot plat
 | 1:1 audio call (outgoing) | Backend-ready | LiveKit Flutter client 2.8.1; `create-call` + `issue-livekit-token` + `call-action` Edge Functions |
 | 1:1 video call (outgoing) | Backend-ready | `VideoTrackRenderer` для local/remote; camera on/off/switch |
 | Incoming call route (foreground) | Backend-ready | Realtime subscription на `calls` table где `callee_id = me` и `state = ringing/created`; `IncomingCallOverlay` показывается над текущим UI |
-| Incoming call (background push) | Firebase-pending | Нет Firebase SDK/google-services.json; foreground realtime watcher работает, background push — нет |
+| Incoming call (background push) | Implemented (client) | FCM `incoming_call` data payload via `send-call-push` Edge Function; `pushIncomingCallProvider` synthesizes `CallSession`; background handler is top-level with no UI access. Server-side FCM delivery requires `FIREBASE_SERVICE_ACCOUNT_JSON` secret |
 | Ringing/accept/decline/cancel | Implemented (client) | `CallSessionTransition` pure state machine; все transitions unit-tested |
 | Busy/missed/ended states | Backend-ready | Client обрабатывает terminal states из realtime; server timeout/edge function не деплоилась |
 | LiveKit room connect (after server token) | Implemented (client) | `CallRoomService.connect()` требует `canConnectRoom == true` (token + url + roomName); API secret никогда не в client |
@@ -112,8 +120,9 @@ Screen share, E2EE/secret chats, channels/public feed UI, stories/live, bot plat
 
 ## Verification state
 
-- `dart format --output=none --set-exit-if-changed lib test`: проходит на Dart 3.12.2.
-- `flutter analyze --no-pub --fatal-infos --fatal-warnings`: проходит на Flutter 3.44.8.
-- `flutter test --no-pub`: 76 tests проходят, включая email redirect и pure-domain tests звонков.
+- `dart format --output=none --set-exit-if-changed lib test`: passes.
+- `flutter analyze --no-pub --fatal-infos --fatal-warnings`: passes, no issues.
+- `flutter test --no-pub`: 99 tests pass, including FCM payload parsing (17 tests) and token registration contract maps (6 tests).
+- Firebase client integration implemented: safe init, FCM token lifecycle, foreground/background handlers, notification channels, push→router/call event bus, settings UI with honest Firebase-pending state.
 - Миграция `202607240004_calls.sql` и Edge Function source подготовлены, но не применены/развёрнуты: Supabase MCP connection отключена.
 - Миграции 001–003 применены к выделенному Supabase-проекту, RLS/realtime extensions проверены, а два Supabase Cron job активны. Android `FLAG_SECURE` host генерируется CI; microphone/biometric/file intents, Firebase push, deployed call backend и реальные calls требуют проверки на устройствах.

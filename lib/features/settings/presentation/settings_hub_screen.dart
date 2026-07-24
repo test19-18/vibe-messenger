@@ -80,8 +80,8 @@ class SettingsHubScreen extends ConsumerWidget {
                 iconColor: AppColors.electricBlue,
                 title: context.tr(ru: 'Уведомления', en: 'Notifications'),
                 subtitle: context.tr(
-                  ru: 'Backend-ready · Firebase pending',
-                  en: 'Backend-ready · Firebase pending',
+                  ru: 'Push, каналы, разрешение',
+                  en: 'Push, channels, permission',
                 ),
                 onTap: () => context.push('/settings/notifications'),
               ),

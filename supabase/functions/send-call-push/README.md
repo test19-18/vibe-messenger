@@ -14,13 +14,36 @@ Requires a valid Supabase user JWT in the `Authorization` header (the caller's t
 
 ## Request Body
 
-| Field        | Type   | Required | Description                          |
-|--------------|--------|----------|--------------------------------------|
-| `callId`     | string | Yes      | UUID of the call                     |
-| `calleeId`   | string | Yes      | UUID of the callee                   |
-| `roomName`   | string | Yes      | LiveKit room name                    |
-| `callerName` | string | No       | Display name of the caller           |
-| `mediaKind`  | string | No       | `"audio"` (default) or `"video"`    |
+| Field             | Type   | Required | Description                          |
+|-------------------|--------|----------|--------------------------------------|
+| `callId`          | string | Yes      | UUID of the call                     |
+| `calleeId`        | string | Yes      | UUID of the callee                   |
+| `roomName`        | string | Yes      | LiveKit room name                    |
+| `callerName`      | string | No       | Display name of the caller           |
+| `callerId`        | string | No       | UUID of the caller (defaults to auth user) |
+| `mediaKind`       | string | No       | `"audio"` (default) or `"video"`    |
+| `conversationId`  | string | No       | UUID of the conversation (optional context) |
+
+## FCM Data Payload Contract
+
+The function sends a **data-only** FCM message so the client retains full
+control over call lifecycle and UI. The `type` field identifies the payload:
+
+```json
+{
+  "type": "incoming_call",
+  "call_id": "<uuid>",
+  "room_name": "<string>",
+  "caller_name": "<string>",
+  "caller_id": "<uuid>",
+  "media_kind": "audio|video",
+  "conversation_id": "<uuid>"
+}
+```
+
+The Flutter client parses this via `FcmPayload.fromData()` in
+`lib/features/notifications/domain/fcm_payload.dart`. The `channel_id` is
+set to `vibe_incoming_calls` (matching the client's notification channel).
 
 ## Response
 
