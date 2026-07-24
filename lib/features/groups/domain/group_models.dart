@@ -47,7 +47,7 @@ class GroupMember {
     required this.status,
     required this.joinedAt,
     this.profile,
-    this.localTag,
+    this.tag,
   });
 
   final String conversationId;
@@ -56,12 +56,12 @@ class GroupMember {
   final String status;
   final DateTime joinedAt;
   final UserProfile? profile;
-  final String? localTag;
+  final String? tag;
 
   bool get isActive => status == 'active';
   bool get isAdmin => role == 'owner' || role == 'admin';
 
-  factory GroupMember.fromMap(Map<String, dynamic> map, {String? localTag}) {
+  factory GroupMember.fromMap(Map<String, dynamic> map, {String? tag}) {
     final profileMap = map['profiles'];
     return GroupMember(
       conversationId: _required(map['conversation_id']),
@@ -73,7 +73,38 @@ class GroupMember {
       profile: profileMap is Map
           ? UserProfile.fromMap(Map<String, dynamic>.from(profileMap))
           : null,
-      localTag: localTag,
+      tag: tag,
+    );
+  }
+}
+
+class ConversationMemberTag {
+  const ConversationMemberTag({
+    required this.conversationId,
+    required this.userId,
+    required this.memberId,
+    required this.tag,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String conversationId;
+  final String userId;
+  final String memberId;
+  final String tag;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  factory ConversationMemberTag.fromMap(Map<String, dynamic> map) {
+    final createdAt =
+        _date(map['created_at']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    return ConversationMemberTag(
+      conversationId: _required(map['conversation_id']),
+      userId: _required(map['user_id']),
+      memberId: _required(map['member_id']),
+      tag: _required(map['tag']),
+      createdAt: createdAt,
+      updatedAt: _date(map['updated_at']) ?? createdAt,
     );
   }
 }

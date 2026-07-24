@@ -1,7 +1,5 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/errors/error_message.dart';
@@ -47,12 +45,13 @@ class GroupRepository {
         )
         .eq('conversation_id', conversationId)
         .order('joined_at');
-    final tags = await _loadLocalTags(conversationId);
+    final tags = await listMemberTags(conversationId);
+    final tagsByMember = {for (final tag in tags) tag.memberId: tag.tag};
     return rows
         .map(
           (row) => GroupMember.fromMap(
             row,
-            localTag: tags[row['user_id'] as String],
+            tag: tagsByMember[row['user_id'] as String],
           ),
         )
         .toList();
@@ -292,40 +291,57 @@ class GroupRepository {
     }
   }
 
-  Future<void> saveLocalMemberTag({
-    required String conversationId,
-    required String userId,
-    required String? tag,
-  }) async {
-    final preferences = await SharedPreferences.getInstance();
-    final tags = await _loadLocalTags(conversationId);
-    final normalized = _nullable(tag);
-    if (normalized == null) {
-      tags.remove(userId);
-    } else {
-      tags[userId] = normalized;
-    }
-    await preferences.setString(_tagKey(conversationId), jsonEncode(tags));
+  Future<List<ConversationMemberTag>> listMemberTags(
+    String conversationId,
+  ) async {
+    final rows = await _requiredClient
+        .from('conversation_member_tags')
+        .select()
+        .eq('conversation_id', conversationId)
+        .order('updated_at', ascending: false);
+    return rows.map(ConversationMemberTag.fromMap).toList();
   }
 
-  Future<Map<String, String>> _loadLocalTags(String conversationId) async {
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      final raw = preferences.getString(_tagKey(conversationId));
-      final decoded = raw == null ? null : jsonDecode(raw);
-      if (decoded is! Map) {
-        return <String, String>{};
-      }
-      return decoded.map(
-        (key, value) => MapEntry(key.toString(), value.toString()),
-      );
-    } catch (_) {
-      return <String, String>{};
+  Future<void> saveMemberTag({
+    required String conversationId,
+    required String memberId,
+    required String? tag,
+  }) async {
+    final userId = _requiredClient.auth.currentUser?.id;
+    if (userId == null) {
+      throw const BackendUnavailableException('Сессия не найдена.');
+    }
+    final normalized = _nullable(tag);
+    if (normalized == null) {
+      await _requiredClient
+          .from('conversation_member_tags')
+          .delete()
+          .eq('conversation_id', conversationId)
+          .eq('user_id', userId)
+          .eq('member_id', memberId);
+      return;
+    }
+    if (normalized.length > 64) {
+      throw const FormatException('Метка должна быть короче 65 символов.');
+    }
+    final updated = await _requiredClient
+        .from('conversation_member_tags')
+        .update({'tag': normalized})
+        .eq('conversation_id', conversationId)
+        .eq('user_id', userId)
+        .eq('member_id', memberId)
+        .select('member_id')
+        .maybeSingle();
+    if (updated == null) {
+      await _requiredClient.from('conversation_member_tags').insert({
+        'conversation_id': conversationId,
+        'user_id': userId,
+        'member_id': memberId,
+        'tag': normalized,
+      });
     }
   }
 }
-
-String _tagKey(String conversationId) => 'vibe.group_tags.$conversationId.v1';
 
 String? _nullable(String? value) {
   final normalized = value?.trim();

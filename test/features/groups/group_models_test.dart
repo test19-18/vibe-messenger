@@ -25,4 +25,18 @@ void main() {
       throwsFormatException,
     );
   });
+
+  test('maps a server-backed personal member tag', () {
+    final tag = ConversationMemberTag.fromMap({
+      'conversation_id': 'group-id',
+      'user_id': 'owner-id',
+      'member_id': 'member-id',
+      'tag': 'Дизайнер',
+      'created_at': '2026-07-24T10:00:00Z',
+      'updated_at': '2026-07-24T11:00:00Z',
+    });
+
+    expect(tag.memberId, 'member-id');
+    expect(tag.tag, 'Дизайнер');
+  });
 }

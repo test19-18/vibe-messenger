@@ -197,8 +197,8 @@ class _AboutTab extends StatelessWidget {
                   ),
                   subtitle: Text(
                     context.tr(
-                      ru: 'Не поддержаны текущей схемой; fake success не используется.',
-                      en: 'Not supported by the current schema; no fake success is shown.',
+                      ru: 'Доступны в меню чата и синхронизируются с Supabase.',
+                      en: 'Available from the chat menu and synced with Supabase.',
                     ),
                   ),
                 ),
@@ -224,23 +224,23 @@ class _MembersTab extends ConsumerWidget {
   final String? currentUserId;
   final bool canManage;
 
-  Future<void> _editLocalTag(
+  Future<void> _editMemberTag(
     BuildContext context,
     WidgetRef ref,
     GroupMember member,
   ) async {
-    final controller = TextEditingController(text: member.localTag);
+    final controller = TextEditingController(text: member.tag);
     final save = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(context.tr(ru: 'Локальная метка', en: 'Local tag')),
+        title: Text(context.tr(ru: 'Личная метка', en: 'Personal tag')),
         content: TextField(
           controller: controller,
-          maxLength: 40,
+          maxLength: 64,
           decoration: InputDecoration(
             helperText: context.tr(
-              ru: 'Хранится только на этом устройстве; поля в DB нет.',
-              en: 'Stored only on this device; the DB has no tag column.',
+              ru: 'Синхронизируется через Supabase и видна только вам.',
+              en: 'Synced through Supabase and visible only to you.',
             ),
           ),
         ),
@@ -259,7 +259,7 @@ class _MembersTab extends ConsumerWidget {
     if (save == true) {
       await ref
           .read(groupMutationProvider(conversationId).notifier)
-          .saveLocalTag(member.userId, controller.text);
+          .saveMemberTag(member.userId, controller.text);
     }
     controller.dispose();
   }
@@ -292,7 +292,7 @@ class _MembersTab extends ConsumerWidget {
               title: Text(profile?.visibleName ?? member.userId),
               subtitle: Text(
                 '${member.role} · ${member.status}'
-                '${member.localTag == null ? '' : ' · ${member.localTag} (local)'}',
+                '${member.tag == null ? '' : ' · ${member.tag}'}',
               ),
               trailing: PopupMenuButton<String>(
                 onSelected: (value) async {
@@ -301,7 +301,7 @@ class _MembersTab extends ConsumerWidget {
                   );
                   switch (value) {
                     case 'tag':
-                      await _editLocalTag(context, ref, member);
+                      await _editMemberTag(context, ref, member);
                       break;
                     case 'admin':
                       await controller.updateMember(
@@ -351,7 +351,7 @@ class _MembersTab extends ConsumerWidget {
                   PopupMenuItem(
                     value: 'tag',
                     child: Text(
-                      context.tr(ru: 'Локальная метка', en: 'Local tag'),
+                      context.tr(ru: 'Личная метка', en: 'Personal tag'),
                     ),
                   ),
                   if (canManage && member.userId != currentUserId) ...[

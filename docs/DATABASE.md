@@ -117,16 +117,16 @@ Flutter-клиент 0.2 использует ручные defensive mapper-мо
 
 - `profiles` + nested `user_presence`; FK relation `conversation_members_user_id_fkey` для embedded profile;
 - `contacts`, `user_blocks`, `reports` для request/block/report workflow;
-- `conversations`, `conversation_members`, `conversation_user_settings`, `chat_folders`, `chat_folder_conversations`;
-- `messages` включая `kind`, `metadata`, `client_nonce`, reply/edit/delete fields;
-- `message_attachments`, `message_reactions`, `conversation_read_receipts`, `conversation_typing`, `message_pins`;
-- `group_invitations`, `group_join_requests`, group role/status updates;
+- `conversations`, `conversation_members`, `conversation_user_settings` с `auto_delete_seconds`/`protected_content`, `chat_folders`, `chat_folder_conversations`;
+- `messages` включая `kind`, `metadata`, `client_nonce`, reply/edit/delete fields и `expires_at`;
+- `message_user_deletions`, `scheduled_messages`, `message_attachments`, `message_reactions`, `conversation_read_receipts`, `conversation_typing`, `message_pins`;
+- `group_invitations`, `group_join_requests`, `conversation_member_tags`, group role/status updates;
 - `polls`, `poll_options`, `poll_votes`;
 - `user_settings`, `user_devices`;
-- RPC `create_direct_conversation`, `create_group_conversation`, ownership/invite/join RPC, `create_poll`, `get_poll_results`, `register_device`;
+- RPC `create_direct_conversation`, `create_group_conversation`, ownership/invite/join RPC, `create_poll`, `get_poll_results`, `register_device`, scheduled delivery и expiry cleanup;
 - private buckets `avatars`, `chat-media`, `voice-messages` и короткие signed URLs/download.
 
-Клиент фильтрует reserved `channel` rows и не содержит channel creation/UI. `user_presence` остаётся canonical presence source. Scheduled messages, auto-delete и server member tags в текущей схеме отсутствуют, поэтому Flutter не симулирует их успешную серверную запись.
+Клиент фильтрует reserved `channel` rows и не содержит channel creation/UI. `user_presence` остаётся canonical presence source. Миграции 002–003 добавляют delete-for-self, server member tags, scheduled messages, auto-delete и protected content; два активных Supabase Cron job выполняют доставку и очистку.
 
 ## 6. Применение и проверка
 
@@ -138,7 +138,7 @@ supabase db reset
 supabase db push
 ```
 
-После миграции выполните `supabase/verification.sql` в SQL Editor или через `psql -v ON_ERROR_STOP=1`. Скрипт:
+После миграций выполните `supabase/verification.sql` и `supabase/verification_extensions.sql` в SQL Editor или через `psql -v ON_ERROR_STOP=1`. Скрипты:
 
 1. падает при отсутствии таблиц, PK/FK/check constraints, triggers или RLS policies;
 2. проверяет grants и закрытый function surface;

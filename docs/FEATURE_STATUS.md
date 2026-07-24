@@ -33,7 +33,7 @@
 | Folders and filters | Implemented | create/assign/filter; repository также поддерживает delete |
 | Text/reply/edit | Implemented | sender/RLS checks |
 | Delete for everyone | Implemented | единственная schema semantics — global soft-delete |
-| Delete only for self | Not supported | отдельной таблицы/поля в schema нет |
+| Delete only for self | Implemented | insert в `message_user_deletions`; realtime hidden-id stream сразу фильтрует локальную ленту |
 | Reactions | Implemented | realtime stream; current table lacks `conversation_id`, so stream is RLS-wide then filtered by message id |
 | Read receipts | Implemented | monotonic `last_read_message_id`; timestamp fallback |
 | Typing | Implemented | realtime + TTL, privacy toggle |
@@ -47,8 +47,9 @@
 | Document download/open | Implemented | private download to temp + `open_filex`; native verification required |
 | Location/contact payload | Implemented | validated JSON metadata; location copies coordinates, no map SDK |
 | Voice record/play | Implemented | `record` + `just_audio`; native permission/codec verification required |
-| Scheduled messages | Local placeholder | schema/RPC отсутствует |
-| Auto-delete timer | Local placeholder | schema/RPC отсутствует |
+| Scheduled messages | Implemented | text create через RPC, realtime list, cancel RPC, date/time picker и `silent`; Supabase Cron доставляет due messages каждую минуту |
+| Auto-delete timer / `expires_at` | Implemented | per-user `auto_delete_seconds`; срок новых сообщений выводится в bubble, expired rows дополнительно скрываются локальным timer |
+| Protected chat content | Implemented | `protected_content` синхронизирован; CI генерирует Android MethodChannel и включает `FLAG_SECURE`, lifecycle-cover остаётся дополнительной защитой |
 | Offline queue/database | Not implemented | online-first client |
 
 ## Groups and polls
@@ -62,7 +63,7 @@
 | Targeted invitation | Implemented | admin insert + invitee accept/decline UI |
 | Link invitation | Implemented | token returned once, copied as `vibe://`; deep-link native wiring pending |
 | Join request/create/review | Implemented | direct table insert + review RPC |
-| Member tags | Local placeholder | persisted in SharedPreferences and labelled local-only; DB has no tag field |
+| Member tags | Implemented | личные server-backed метки в `conversation_member_tags`; RLS показывает только метки текущего пользователя |
 | Poll create | Implemented | atomic `create_poll` RPC |
 | Poll vote/unvote/results | Implemented | DB limits/locks + `get_poll_results` RPC |
 | Poll advanced editing/close UI | Backend-ready | schema supports parts; dedicated editor not included |
@@ -92,8 +93,8 @@ Calls, videoconferencing, screen share, E2EE/secret chats, channels/public feed 
 
 ## Verification state
 
-- `dart format`: executed on `lib` and `test`.
-- `flutter analyze --no-pub --fatal-infos --fatal-warnings`: passes on Flutter 3.44.8 toolchain.
-- `flutter test --no-pub`: pure-Dart and widget suite passes.
-- Supabase migration was read but not changed.
-- Backend integration, Android microphone/biometric/file intents, push delivery and release APK behavior require project/device verification.
+- `dart format --output=none --set-exit-if-changed lib test`: проходит на Dart 3.12.2.
+- `flutter analyze --no-pub --fatal-infos --fatal-warnings`: проходит на Flutter 3.44.8.
+- `flutter test --no-pub`: 30 tests проходят, включая новые pure-domain tests для `ScheduledMessage` и расширений `ConversationUserSettings`.
+- `202607240002_product_extensions.sql` прочитана, но SQL и workflow не изменялись.
+- Миграции 001–003 применены к выделенному Supabase-проекту, RLS/realtime extensions проверены, а два Supabase Cron job активны. Android `FLAG_SECURE` host генерируется CI; microphone/biometric/file intents, Firebase push и APK всё ещё требуют проверки сборкой и реальным устройством.

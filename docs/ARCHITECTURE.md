@@ -34,7 +34,7 @@ Publishable key безопасен только вместе с корректн
 
 ## 4. Контракт Supabase
 
-Миграции поддерживаются отдельно от Flutter-клиента; этот этап их не изменяет. Код синхронизирован со следующим минимальным контрактом (snake_case).
+Миграции поддерживаются отдельно от Flutter-клиента; этот этап их не изменяет. Код синхронизирован с initial schema и `202607240002_product_extensions.sql` (snake_case).
 
 ### `profiles`
 
@@ -70,9 +70,22 @@ Direct chat создаётся только атомарным idempotent RPC `c
 | `metadata` | jsonb для location/contact/forward provenance и небольших payload |
 | `client_nonce` | idempotency token клиента |
 | `reply_to_message_id` | uuid nullable self-FK |
+| `expires_at` | timestamptz nullable, server-derived из sender `auto_delete_seconds` |
 | `edited_at`, `deleted_at`, `deleted_by`, `created_at`, `updated_at` | timestamps/uuid |
 
 Редактирование меняет только `body`; trigger выставляет `edited_at`. Soft-delete выставляет `deleted_at`; trigger очищает содержимое и записывает автора удаления. RLS допускает чтение/отправку только участникам, редактирование — автору (групповой admin может удалить).
+
+### Product extensions
+
+| Контракт | Использование клиента |
+|---|---|
+| `message_user_deletions` | insert delete-only-for-self; отдельный realtime stream hidden IDs объединяется с message stream до выдачи UI |
+| `conversation_member_tags` | личные метки участников; list/update-or-insert/delete под self-only RLS, без SharedPreferences |
+| `scheduled_messages` | realtime list по беседе; создание только через `create_scheduled_message`, отмена через `cancel_scheduled_message` |
+| `conversation_user_settings.auto_delete_seconds` | nullable 1…31536000; влияет только на новые сообщения отправителя, `expires_at` задаёт trigger |
+| `conversation_user_settings.protected_content` | per-user настройка UI/platform screen protection |
+
+`ScheduledMessage` и `ConversationUserSettings` — defensive pure-Dart domain models. Клиент не вызывает service-role delivery/cleanup RPC: `process_due_scheduled_messages` и `cleanup_expired_messages` принадлежат trusted scheduler/pg_cron.
 
 ### Read и typing state
 
@@ -86,10 +99,10 @@ Direct chat создаётся только атомарным idempotent RPC `c
 
 ## 5. Realtime
 
-- Сообщения: `stream(primaryKey: ['id'])`, фильтр по `conversation_id`, дополнительная сортировка на клиенте.
+- Сообщения: stream `messages` объединяется со stream `message_user_deletions` по `conversation_id`; UI получает только rows без hidden ID и с будущим/null `expires_at`. До первого snapshot обоих streams список не выдаётся, чтобы скрытая row не мелькнула. Timer переэмитит список в момент ближайшего expiry.
 - Typing: realtime stream таблицы `conversation_typing`; UI делает debounce, backend ограничивает TTL, локальный таймер скрывает просроченные строки.
 - Read state: monotonic `last_read_message_id` + timestamp upsert при открытии/получении сообщений.
-- Reactions, pins, read receipts, polls и presence читаются через опубликованные таблицы; attachments/polls дополнительно получают signed/RPC данные.
+- Reactions, pins, read receipts, polls, scheduled messages, member tags, per-chat settings и presence читаются через опубликованные таблицы; attachments/polls дополнительно получают signed/RPC данные.
 - `message_reactions` не содержит `conversation_id`, поэтому realtime stream проходит RLS и затем фильтруется клиентом по UUID сообщения.
 
 Для production дополнительно нужны retry/backoff, cursor pagination и серверная агрегация unread count.
@@ -105,8 +118,9 @@ Direct chat создаётся только атомарным idempotent RPC `c
 - Signed URLs живут один час; долгоживущие media screens должны обновлять capability URL после expiry.
 - Media upload выполняет Storage → message → attachment с cleanup/soft-delete на ошибке, но DB и Storage не имеют общей транзакции; orphan cleanup остаётся эксплуатационной задачей.
 - Forward media/poll требует copy RPC/storage policy и намеренно отклоняется, text/location/contact пересылаются новым message с provenance metadata.
-- Scheduled/auto-delete backend отсутствует: UI показывает local placeholder без fake success.
-- Member tags — явно local-only SharedPreferences, потому что schema не содержит поля.
+- Scheduled delivery выполняют два активных Supabase Cron job: due messages каждую минуту и cleanup истёкших сообщений каждые 5 минут. Мобильный клиент не получает service-role.
+- Auto-delete server-authoritative для новых сообщений отправителя; клиентский timer своевременно скрывает уже полученный `expires_at`, а Cron выполняет backend cleanup.
+- `protected_content` вызывает `ScreenProtectionApi` через channel `vibe/screen_protection`. CI-скрипт генерирует Android handler с `WindowManager.LayoutParams.FLAG_SECURE`; Dart lifecycle-cover остаётся дополнительным fallback.
 - RU/EN покрывает основную навигацию и новые экраны; legacy auth/profile copy преимущественно RU.
 - Push delivery/FCM token acquisition ожидают Firebase SDK; service-role и Firebase config в код не добавлены.
 - Поля и RLS должны оставаться синхронизированы с миграцией; отсутствующая таблица даст управляемый error state, но не данные.
@@ -127,10 +141,12 @@ Workflow ставит Flutter 3.44.8 из stable-канала, согласов�
 
 ### Groups/polls
 
-Group creation, ownership, invite tokens, invitation acceptance, join review и poll creation вызывают только audited RPC. Обычные role/status updates идут через RLS-protected tables. `GroupDetails.fromMap` отвергает `channel`, чтобы reserved enum не превратился в неутверждённый UI.
+Group creation, ownership, invite tokens, invitation acceptance, join review и poll creation вызывают только audited RPC. Обычные role/status updates идут через RLS-protected tables. Личные member tags загружаются из `conversation_member_tags` вместе со списком участников и после mutation инвалидируют provider. `GroupDetails.fromMap` отвергает `channel`, чтобы reserved enum не превратился в неутверждённый UI.
 
 ### Local settings/security
 
-`AppPreferences` разделяет canonical backend columns и дополнительные значения внутри `user_settings.settings`; SharedPreferences даёт local-first запуск. PIN хранится как salted SHA-256 hash, а не plaintext, но SharedPreferences не является hardware-backed keystore. `local_auth`, microphone recorder и file intents требуют нативной platform/device проверки.
+`AppPreferences` разделяет canonical backend columns и дополнительные значения внутри `user_settings.settings`; SharedPreferences даёт local-first запуск только глобальным app preferences/PIN, но не member tags. PIN хранится как salted SHA-256 hash, а не plaintext, но SharedPreferences не является hardware-backed keystore. `local_auth`, microphone recorder и file intents требуют нативной platform/device проверки.
+
+`ScreenProtectionService` зависит от абстракции `ScreenProtectionApi`. После `flutter create` скрипт `tool/configure_android.py` переписывает Kotlin `MainActivity`, регистрирует `MethodChannel("vibe/screen_protection")`, обрабатывает `setProtectedContent(enabled)` и add/clear `WindowManager.LayoutParams.FLAG_SECURE`. Он также добавляет `vibe://` intent-filter; lifecycle privacy cover остаётся дополнительной защитой.
 
 Точная продуктовая матрица: [`FEATURE_STATUS.md`](FEATURE_STATUS.md).

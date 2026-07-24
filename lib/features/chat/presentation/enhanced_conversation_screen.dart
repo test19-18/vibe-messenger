@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_message.dart';
 import '../../../core/localization/app_localizations.dart';
@@ -12,12 +13,16 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../chats/domain/conversation_summary.dart';
+import '../../chats/domain/conversation_user_settings.dart';
 import '../../chats/providers/conversation_providers.dart';
 import '../../contacts/providers/contact_providers.dart';
+import '../../security/providers/screen_protection_providers.dart';
+import '../../security/services/screen_protection_service.dart';
 import '../../settings/domain/app_preferences.dart';
 import '../../settings/providers/settings_providers.dart';
 import '../domain/chat_message.dart';
 import '../domain/message_details.dart';
+import '../domain/scheduled_message.dart';
 import '../providers/message_providers.dart';
 import '../services/voice_recording_service.dart';
 import 'widgets/enhanced_message_bubble.dart';
@@ -41,28 +46,73 @@ class EnhancedConversationScreen extends ConsumerStatefulWidget {
 }
 
 class _EnhancedConversationScreenState
-    extends ConsumerState<EnhancedConversationScreen> {
+    extends ConsumerState<EnhancedConversationScreen>
+    with WidgetsBindingObserver {
   final _composerController = TextEditingController();
   final _composerFocusNode = FocusNode();
   final _selectedIds = <String>{};
   final _voiceRecorder = VoiceRecordingService();
+  final _screenProtectionOwner = Object();
   ChatMessage? _replyTo;
   ChatMessage? _editing;
   Timer? _typingTimer;
   Timer? _draftTimer;
   bool _recording = false;
   bool _draftLoaded = false;
+  bool _protectedContent = false;
+  bool _privacyCover = false;
+  ScreenProtectionMode _screenProtectionMode = ScreenProtectionMode.disabled;
 
   String? get _currentUserId => ref.read(currentUserProvider)?.id;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_protectedContent || !mounted) {
+      return;
+    }
+    final covered = state != AppLifecycleState.resumed;
+    if (_privacyCover != covered) {
+      setState(() => _privacyCover = covered);
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _typingTimer?.cancel();
     _draftTimer?.cancel();
+    unawaited(
+      ref
+          .read(screenProtectionServiceProvider)
+          .setProtectedFor(_screenProtectionOwner, enabled: false),
+    );
     unawaited(_voiceRecorder.dispose());
     _composerController.dispose();
     _composerFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _applyProtectedContent(bool enabled) async {
+    if (mounted && _protectedContent != enabled) {
+      setState(() {
+        _protectedContent = enabled;
+        if (!enabled) {
+          _privacyCover = false;
+        }
+      });
+    }
+    final mode = await ref
+        .read(screenProtectionServiceProvider)
+        .setProtectedFor(_screenProtectionOwner, enabled: enabled);
+    if (mounted && _protectedContent == enabled) {
+      setState(() => _screenProtectionMode = mode);
+    }
   }
 
   Future<void> _markRead(List<ChatMessage> messages) async {
@@ -166,6 +216,215 @@ class _EnhancedConversationScreenState
       _replyTo = null;
       _editing = null;
     });
+  }
+
+  Future<void> _scheduleCurrentMessage() async {
+    if (_editing != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              ru: 'Сначала завершите редактирование сообщения.',
+              en: 'Finish editing the message first.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    final body = _composerController.text.trim();
+    if (body.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(
+              ru: 'Введите текст для отложенной отправки.',
+              en: 'Enter text to schedule.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    final now = DateTime.now();
+    final initial = now.add(const Duration(minutes: 5));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 1, now.month, now.day),
+    );
+    if (date == null || !mounted) {
+      return;
+    }
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (time == null || !mounted) {
+      return;
+    }
+    final scheduledFor = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    var silent = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            context.tr(ru: 'Отложить сообщение', en: 'Schedule message'),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(DateFormat('dd.MM.yyyy HH:mm').format(scheduledFor)),
+              const SizedBox(height: AppSpacing.sm),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: silent,
+                onChanged: (value) => setDialogState(() => silent = value),
+                title: Text(
+                  context.tr(
+                    ru: 'Без уведомления (silent)',
+                    en: 'Send silently',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(context.tr(ru: 'Отмена', en: 'Cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(context.tr(ru: 'Запланировать', en: 'Schedule')),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final success = await ref
+        .read(messageMutationProvider(widget.conversationId).notifier)
+        .schedule(
+          body: body,
+          scheduledFor: scheduledFor,
+          silent: silent,
+          replyToId: _replyTo?.id,
+        );
+    if (!mounted || !success) {
+      return;
+    }
+    _composerController.clear();
+    _draftTimer?.cancel();
+    unawaited(_saveDraft(''));
+    setState(() => _replyTo = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          context.tr(ru: 'Сообщение запланировано.', en: 'Message scheduled.'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showScheduledMessages() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => Consumer(
+        builder: (context, sheetRef, _) {
+          final state = sheetRef.watch(
+            scheduledMessagesProvider(widget.conversationId),
+          );
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.65,
+              child: state.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Text(errorMessage(error)),
+                  ),
+                ),
+                data: (messages) {
+                  if (messages.isEmpty) {
+                    return Center(
+                      child: Text(
+                        context.tr(
+                          ru: 'Нет отложенных сообщений.',
+                          en: 'No scheduled messages.',
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      0,
+                      AppSpacing.md,
+                      AppSpacing.lg,
+                    ),
+                    itemCount: messages.length,
+                    separatorBuilder: (_, _) => const Divider(),
+                    itemBuilder: (context, index) {
+                      final message = messages[index];
+                      return ListTile(
+                        leading: Icon(
+                          message.silent
+                              ? Icons.notifications_off_outlined
+                              : Icons.schedule_send_rounded,
+                        ),
+                        title: Text(
+                          message.body,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          '${DateFormat('dd.MM.yyyy HH:mm').format(message.scheduledFor)} · '
+                          '${_scheduledStatusLabel(context, message.status)}',
+                        ),
+                        trailing: message.canCancel
+                            ? IconButton(
+                                onPressed: () => sheetRef
+                                    .read(
+                                      messageMutationProvider(
+                                        widget.conversationId,
+                                      ).notifier,
+                                    )
+                                    .cancelScheduled(message),
+                                icon: const Icon(
+                                  Icons.cancel_outlined,
+                                  color: AppColors.danger,
+                                ),
+                                tooltip: context.tr(
+                                  ru: 'Отменить',
+                                  en: 'Cancel',
+                                ),
+                              )
+                            : null,
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   void _startReply(ChatMessage message) {
@@ -372,6 +631,16 @@ class _EnhancedConversationScreenState
                     _startEdit(message);
                   },
                 ),
+              ListTile(
+                leading: const Icon(Icons.visibility_off_outlined),
+                title: Text(
+                  context.tr(ru: 'Удалить только у меня', en: 'Delete for me'),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _confirmDeleteForSelf(message);
+                },
+              ),
               if (isMine)
                 ListTile(
                   leading: const Icon(
@@ -402,6 +671,38 @@ class _EnhancedConversationScreenState
     );
   }
 
+  Future<void> _confirmDeleteForSelf(ChatMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          context.tr(ru: 'Удалить только у вас?', en: 'Delete only for you?'),
+        ),
+        content: Text(
+          context.tr(
+            ru: 'Сообщение останется у других участников и будет скрыто из вашей ленты.',
+            en: 'The message remains visible to other members and is hidden from your timeline.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(context.tr(ru: 'Отмена', en: 'Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(context.tr(ru: 'Удалить', en: 'Delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await ref
+          .read(messageMutationProvider(widget.conversationId).notifier)
+          .deleteForSelf(message);
+    }
+  }
+
   Future<void> _confirmDelete(ChatMessage message) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -411,8 +712,8 @@ class _EnhancedConversationScreenState
         ),
         content: Text(
           context.tr(
-            ru: 'Схема поддерживает только глобальный soft-delete. Текст и metadata будут очищены.',
-            en: 'The schema only supports global soft-delete. Text and metadata will be cleared.',
+            ru: 'Сообщение исчезнет у всех участников. Для личного скрытия используйте «Удалить только у меня».',
+            en: 'The message will disappear for everyone. Use “Delete for me” to hide it only for yourself.',
           ),
         ),
         actions: [
@@ -870,6 +1171,124 @@ class _EnhancedConversationScreenState
     }
   }
 
+  Future<void> _showChatSettings() async {
+    ConversationUserSettings settings;
+    try {
+      settings = await ref.read(
+        conversationUserSettingsProvider(widget.conversationId).future,
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage(error))));
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    int? autoDeleteSeconds = settings.autoDeleteSeconds;
+    var protectedContent = settings.protectedContent;
+    final values = <int?>[null, 3600, 86400, 604800, 2592000];
+    if (!values.contains(autoDeleteSeconds)) {
+      values.add(autoDeleteSeconds);
+    }
+    final save = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              MediaQuery.viewInsetsOf(context).bottom + AppSpacing.lg,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  context.tr(
+                    ru: 'Настройки этой беседы',
+                    en: 'Conversation settings',
+                  ),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                DropdownButtonFormField<int?>(
+                  initialValue: autoDeleteSeconds,
+                  decoration: InputDecoration(
+                    labelText: context.tr(
+                      ru: 'Автоудаление моих новых сообщений',
+                      en: 'Auto-delete my new messages',
+                    ),
+                  ),
+                  items: [
+                    for (final value in values)
+                      DropdownMenuItem<int?>(
+                        value: value,
+                        child: Text(_autoDeleteLabel(context, value)),
+                      ),
+                  ],
+                  onChanged: (value) =>
+                      setSheetState(() => autoDeleteSeconds = value),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  value: protectedContent,
+                  onChanged: (value) =>
+                      setSheetState(() => protectedContent = value),
+                  title: Text(
+                    context.tr(
+                      ru: 'Защищённое содержимое',
+                      en: 'Protected content',
+                    ),
+                  ),
+                  subtitle: Text(
+                    context.tr(
+                      ru: 'Запрашивает FLAG_SECURE через platform channel; без Android wiring скрывает чат только при уходе приложения в фон.',
+                      en: 'Requests FLAG_SECURE through a platform channel; without Android wiring it only covers the chat while the app is backgrounded.',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                FilledButton(
+                  onPressed: () => Navigator.pop(sheetContext, true),
+                  child: Text(context.tr(ru: 'Сохранить', en: 'Save')),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (save != true || !mounted) {
+      return;
+    }
+    final success = await ref
+        .read(conversationSettingsMutationProvider.notifier)
+        .updateExtensions(
+          conversationId: widget.conversationId,
+          autoDeleteSeconds: autoDeleteSeconds,
+          clearAutoDelete: autoDeleteSeconds == null,
+          protectedContent: protectedContent,
+        );
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.tr(ru: 'Настройки сохранены.', en: 'Settings saved.'),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _showConversationMenu() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -910,28 +1329,26 @@ class _EnhancedConversationScreenState
               leading: const Icon(Icons.schedule_send_outlined),
               title: Text(
                 context.tr(
-                  ru: 'Отложенная отправка / автоудаление',
-                  en: 'Scheduled send / auto-delete',
-                ),
-              ),
-              subtitle: Text(
-                context.tr(
-                  ru: 'Локальный placeholder: в schema нет полей/RPC.',
-                  en: 'Local placeholder: the schema has no fields/RPC.',
+                  ru: 'Отложенные сообщения',
+                  en: 'Scheduled messages',
                 ),
               ),
               onTap: () {
                 Navigator.pop(sheetContext);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      context.tr(
-                        ru: 'Функция не отправляет fake success и ждёт backend-контракт.',
-                        en: 'No fake success is sent; this awaits a backend contract.',
-                      ),
-                    ),
-                  ),
-                );
+                _showScheduledMessages();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.admin_panel_settings_outlined),
+              title: Text(
+                context.tr(
+                  ru: 'Автоудаление и защита экрана',
+                  en: 'Auto-delete and screen protection',
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showChatSettings();
               },
             ),
           ],
@@ -981,6 +1398,20 @@ class _EnhancedConversationScreenState
   @override
   Widget build(BuildContext context) {
     final messageState = ref.watch(messagesProvider(widget.conversationId));
+    final conversationSettings = ref
+        .watch(conversationUserSettingsProvider(widget.conversationId))
+        .valueOrNull;
+    if (conversationSettings != null &&
+        conversationSettings.protectedContent != _protectedContent) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            conversationSettings.protectedContent != _protectedContent) {
+          unawaited(
+            _applyProtectedContent(conversationSettings.protectedContent),
+          );
+        }
+      });
+    }
     final mutationState = ref.watch(
       messageMutationProvider(widget.conversationId),
     );
@@ -1046,10 +1477,20 @@ class _EnhancedConversationScreenState
         ).showSnackBar(SnackBar(content: Text(errorMessage(next.error!))));
       }
     });
+    ref.listen<AsyncValue<void>>(conversationSettingsMutationProvider, (
+      previous,
+      next,
+    ) {
+      if (next.hasError && previous?.error != next.error) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage(next.error!))));
+      }
+    });
 
     final selecting = _selectedIds.isNotEmpty;
     final messages = messageState.valueOrNull ?? const <ChatMessage>[];
-    return Scaffold(
+    final screen = Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
         leading: selecting
@@ -1110,6 +1551,42 @@ class _EnhancedConversationScreenState
       ),
       body: Column(
         children: [
+          if (conversationSettings?.autoDeleteEnabled == true ||
+              conversationSettings?.protectedContent == true)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs,
+              ),
+              color: AppColors.warning.withValues(alpha: 0.14),
+              child: Row(
+                children: [
+                  const Icon(Icons.shield_outlined, size: 18),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (conversationSettings?.autoDeleteEnabled == true)
+                          '${context.tr(ru: 'Автоудаление', en: 'Auto-delete')}: '
+                              '${_autoDeleteLabel(context, conversationSettings!.autoDeleteSeconds)}',
+                        if (conversationSettings?.protectedContent == true)
+                          _screenProtectionMode == ScreenProtectionMode.native
+                              ? context.tr(
+                                  ru: 'Защита снимков экрана активна',
+                                  en: 'Screenshot protection active',
+                                )
+                              : context.tr(
+                                  ru: 'Защита экрана best effort: нужен Android host wiring',
+                                  en: 'Best-effort screen protection: Android host wiring required',
+                                ),
+                      ].join(' · '),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           if (pinnedIds.isNotEmpty)
             Container(
               width: double.infinity,
@@ -1239,11 +1716,29 @@ class _EnhancedConversationScreenState
             onLocation: _sendLocation,
             onContact: _sendContact,
             onPoll: _createPoll,
+            onSchedule: _scheduleCurrentMessage,
             onVoiceToggle: _toggleRecording,
             isRecording: _recording,
           ),
         ],
       ),
+    );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        screen,
+        if (_protectedContent && _privacyCover)
+          const ColoredBox(
+            color: AppColors.background,
+            child: Center(
+              child: Icon(
+                Icons.shield_rounded,
+                size: 56,
+                color: AppColors.electricBlue,
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -1278,6 +1773,35 @@ String _mimeFor(String? extension) {
     'pptx' =>
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     _ => 'text/plain',
+  };
+}
+
+String _scheduledStatusLabel(
+  BuildContext context,
+  ScheduledMessageStatus status,
+) {
+  return switch (status) {
+    ScheduledMessageStatus.pending => context.tr(ru: 'ожидает', en: 'pending'),
+    ScheduledMessageStatus.cancelled => context.tr(
+      ru: 'отменено',
+      en: 'cancelled',
+    ),
+    ScheduledMessageStatus.delivered => context.tr(
+      ru: 'отправлено',
+      en: 'delivered',
+    ),
+    ScheduledMessageStatus.failed => context.tr(ru: 'ошибка', en: 'failed'),
+  };
+}
+
+String _autoDeleteLabel(BuildContext context, int? seconds) {
+  return switch (seconds) {
+    null => context.tr(ru: 'Выключено', en: 'Off'),
+    3600 => context.tr(ru: '1 час', en: '1 hour'),
+    86400 => context.tr(ru: '1 день', en: '1 day'),
+    604800 => context.tr(ru: '7 дней', en: '7 days'),
+    2592000 => context.tr(ru: '30 дней', en: '30 days'),
+    _ => context.tr(ru: '$seconds сек.', en: '$seconds sec.'),
   };
 }
 

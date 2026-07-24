@@ -146,10 +146,10 @@ class GroupMutationController extends StateNotifier<AsyncValue<String?>> {
         return null;
       });
 
-  Future<bool> saveLocalTag(String userId, String? tag) => _run(() async {
-    await repository.saveLocalMemberTag(
+  Future<bool> saveMemberTag(String memberId, String? tag) => _run(() async {
+    await repository.saveMemberTag(
       conversationId: conversationId,
-      userId: userId,
+      memberId: memberId,
       tag: tag,
     );
     return null;

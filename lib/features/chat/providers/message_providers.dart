@@ -8,6 +8,7 @@ import '../../auth/providers/auth_providers.dart';
 import '../data/message_repository.dart';
 import '../domain/chat_message.dart';
 import '../domain/message_details.dart';
+import '../domain/scheduled_message.dart';
 import '../services/message_service.dart';
 import '../services/typing_service.dart';
 
@@ -22,6 +23,13 @@ final messageServiceProvider = Provider<MessageService>((ref) {
 final messagesProvider = StreamProvider.autoDispose
     .family<List<ChatMessage>, String>((ref, conversationId) {
       return ref.watch(messageRepositoryProvider).watchMessages(conversationId);
+    });
+
+final scheduledMessagesProvider = StreamProvider.autoDispose
+    .family<List<ScheduledMessage>, String>((ref, conversationId) {
+      return ref
+          .watch(messageRepositoryProvider)
+          .watchScheduledMessages(conversationId);
     });
 
 final messageAttachmentsProvider = FutureProvider.autoDispose
@@ -234,6 +242,42 @@ class MessageMutationController extends StateNotifier<AsyncValue<void>> {
     return _run(
       () => service.delete(messageId: message.id, senderId: _requiredUserId),
     );
+  }
+
+  Future<bool> deleteForSelf(ChatMessage message) {
+    return _run(
+      () => service.deleteForSelf(
+        conversationId: conversationId,
+        messageId: message.id,
+        userId: _requiredUserId,
+      ),
+    );
+  }
+
+  Future<bool> schedule({
+    required String body,
+    required DateTime scheduledFor,
+    required bool silent,
+    String? replyToId,
+  }) {
+    return _run(() async {
+      await service.schedule(
+        conversationId: conversationId,
+        body: body,
+        scheduledFor: scheduledFor,
+        silent: silent,
+        replyToId: replyToId,
+      );
+    });
+  }
+
+  Future<bool> cancelScheduled(ScheduledMessage message) {
+    return _run(() async {
+      final cancelled = await service.cancelScheduledMessage(message.id);
+      if (!cancelled) {
+        throw StateError('Сообщение уже нельзя отменить.');
+      }
+    });
   }
 
   Future<bool> uploadAttachment({

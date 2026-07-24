@@ -25,6 +25,7 @@ class ChatMessage {
     this.editedAt,
     this.deletedAt,
     this.deletedBy,
+    this.expiresAt,
   });
 
   final String id;
@@ -39,9 +40,16 @@ class ChatMessage {
   final DateTime? editedAt;
   final DateTime? deletedAt;
   final String? deletedBy;
+  final DateTime? expiresAt;
 
   bool get isDeleted => deletedAt != null;
   bool get isEdited => editedAt != null && deletedAt == null;
+  bool get isExpired {
+    final expiry = expiresAt;
+    return expiry != null && !expiry.isAfter(DateTime.now());
+  }
+
+  bool get isVisible => !isExpired;
 
   String get visibleBody {
     if (isDeleted) {
@@ -81,6 +89,7 @@ class ChatMessage {
       editedAt: _date(map['edited_at']),
       deletedAt: _date(map['deleted_at']),
       deletedBy: _string(map['deleted_by']),
+      expiresAt: _date(map['expires_at']),
     );
   }
 }

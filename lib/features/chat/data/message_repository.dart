@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
@@ -7,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/errors/error_message.dart';
 import '../domain/chat_message.dart';
 import '../domain/message_details.dart';
+import '../domain/scheduled_message.dart';
 
 class MessageRepository {
   const MessageRepository(this._client);
@@ -20,16 +22,16 @@ class MessageRepository {
     if (_client == null) {
       return Stream.error(const BackendUnavailableException());
     }
-    return _requiredClient
+    final messages = _requiredClient
         .from('messages')
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
-        .order('created_at')
-        .map((rows) {
-          final messages = rows.map(ChatMessage.fromMap).toList()
-            ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-          return messages;
-        });
+        .order('created_at');
+    final hidden = _requiredClient
+        .from('message_user_deletions')
+        .stream(primaryKey: ['message_id', 'user_id'])
+        .eq('conversation_id', conversationId);
+    return _visibleMessages(messages: messages, hiddenRows: hidden);
   }
 
   Future<ChatMessage> send({
@@ -79,6 +81,85 @@ class MessageRepository {
         .update({'deleted_at': now})
         .eq('id', messageId)
         .eq('sender_id', senderId);
+  }
+
+  Future<void> deleteForSelf({
+    required String conversationId,
+    required String messageId,
+    required String userId,
+  }) async {
+    await _requiredClient.from('message_user_deletions').insert({
+      'conversation_id': conversationId,
+      'message_id': messageId,
+      'user_id': userId,
+    });
+  }
+
+  Stream<List<ScheduledMessage>> watchScheduledMessages(String conversationId) {
+    if (_client == null) {
+      return Stream.error(const BackendUnavailableException());
+    }
+    return _requiredClient
+        .from('scheduled_messages')
+        .stream(primaryKey: ['id'])
+        .eq('conversation_id', conversationId)
+        .order('scheduled_for')
+        .map((rows) => rows.map(ScheduledMessage.fromMap).toList());
+  }
+
+  Future<ScheduledMessage> createScheduledMessage({
+    required String conversationId,
+    required String body,
+    required DateTime scheduledFor,
+    bool silent = false,
+    MessageKind kind = MessageKind.text,
+    Map<String, dynamic> metadata = const {},
+    String? replyToId,
+  }) async {
+    final normalized = body.trim();
+    if (!scheduledFor.isAfter(DateTime.now())) {
+      throw const FormatException('Выберите время в будущем.');
+    }
+    if (kind == MessageKind.poll || kind == MessageKind.system) {
+      throw const FormatException('Этот тип сообщения нельзя отложить.');
+    }
+    if (kind == MessageKind.text && normalized.isEmpty) {
+      throw const FormatException('Сообщение не может быть пустым.');
+    }
+    final response = await _requiredClient.rpc(
+      'create_scheduled_message',
+      params: {
+        '_conversation_id': conversationId,
+        '_scheduled_for': scheduledFor.toUtc().toIso8601String(),
+        '_kind': kind.name,
+        '_body': normalized.isEmpty ? null : normalized,
+        '_metadata': metadata,
+        '_reply_to': replyToId,
+        '_silent': silent,
+      },
+    );
+    if (response is! String || response.isEmpty) {
+      throw const FormatException(
+        'Backend не вернул идентификатор отложенного сообщения.',
+      );
+    }
+    final row = await _requiredClient
+        .from('scheduled_messages')
+        .select()
+        .eq('id', response)
+        .single();
+    return ScheduledMessage.fromMap(row);
+  }
+
+  Future<bool> cancelScheduledMessage(String scheduledMessageId) async {
+    final response = await _requiredClient.rpc(
+      'cancel_scheduled_message',
+      params: {'_scheduled_message_id': scheduledMessageId},
+    );
+    if (response is! bool) {
+      throw const FormatException('Backend вернул некорректный статус отмены.');
+    }
+    return response;
   }
 
   Future<void> markRead({
@@ -204,7 +285,10 @@ class MessageRepository {
         .ilike('body', '%$escaped%')
         .order('created_at', ascending: false)
         .limit(100);
-    return rows.map(ChatMessage.fromMap).toList();
+    return rows
+        .map(ChatMessage.fromMap)
+        .where((message) => message.isVisible)
+        .toList();
   }
 
   Future<MessageAttachment> uploadAttachment({
@@ -482,6 +566,81 @@ class MessageRepository {
       });
     }
   }
+}
+
+Stream<List<ChatMessage>> _visibleMessages({
+  required Stream<List<Map<String, dynamic>>> messages,
+  required Stream<List<Map<String, dynamic>>> hiddenRows,
+}) {
+  StreamSubscription<List<Map<String, dynamic>>>? messageSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? hiddenSubscription;
+  Timer? expiryTimer;
+  var messageRows = const <Map<String, dynamic>>[];
+  var deletionRows = const <Map<String, dynamic>>[];
+  var receivedMessages = false;
+  var receivedDeletions = false;
+
+  late final StreamController<List<ChatMessage>> controller;
+
+  void emitVisible() {
+    if (!receivedMessages || !receivedDeletions || controller.isClosed) {
+      return;
+    }
+    expiryTimer?.cancel();
+    final hiddenIds = deletionRows
+        .map((row) => row['message_id'])
+        .whereType<String>()
+        .toSet();
+    final now = DateTime.now();
+    final parsed = messageRows.map(ChatMessage.fromMap).toList();
+    final visible =
+        parsed
+            .where(
+              (message) =>
+                  !hiddenIds.contains(message.id) &&
+                  (message.expiresAt == null ||
+                      message.expiresAt!.isAfter(now)),
+            )
+            .toList()
+          ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    controller.add(visible);
+
+    final futureExpirations =
+        visible
+            .map((message) => message.expiresAt)
+            .whereType<DateTime>()
+            .where((expiresAt) => expiresAt.isAfter(now))
+            .toList()
+          ..sort();
+    if (futureExpirations.isNotEmpty) {
+      final delay = futureExpirations.first.difference(now);
+      expiryTimer = Timer(
+        delay + const Duration(milliseconds: 25),
+        emitVisible,
+      );
+    }
+  }
+
+  controller = StreamController<List<ChatMessage>>(
+    onListen: () {
+      messageSubscription = messages.listen((rows) {
+        messageRows = rows;
+        receivedMessages = true;
+        emitVisible();
+      }, onError: controller.addError);
+      hiddenSubscription = hiddenRows.listen((rows) {
+        deletionRows = rows;
+        receivedDeletions = true;
+        emitVisible();
+      }, onError: controller.addError);
+    },
+    onCancel: () async {
+      expiryTimer?.cancel();
+      await messageSubscription?.cancel();
+      await hiddenSubscription?.cancel();
+    },
+  );
+  return controller.stream;
 }
 
 String _nonce() {

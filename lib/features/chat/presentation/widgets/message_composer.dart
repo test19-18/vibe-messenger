@@ -18,6 +18,7 @@ class MessageComposer extends StatelessWidget {
     this.onLocation,
     this.onContact,
     this.onPoll,
+    this.onSchedule,
     this.onVoiceToggle,
     this.isRecording = false,
   });
@@ -34,6 +35,7 @@ class MessageComposer extends StatelessWidget {
   final VoidCallback? onLocation;
   final VoidCallback? onContact;
   final VoidCallback? onPoll;
+  final VoidCallback? onSchedule;
   final VoidCallback? onVoiceToggle;
   final bool isRecording;
 
@@ -143,16 +145,30 @@ class MessageComposer extends StatelessWidget {
                       case 'poll':
                         onPoll?.call();
                         break;
+                      case 'schedule':
+                        onSchedule?.call();
+                        break;
                     }
                   },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
                       value: 'file',
                       child: Text('Фото или документ'),
                     ),
-                    PopupMenuItem(value: 'location', child: Text('Геопозиция')),
-                    PopupMenuItem(value: 'contact', child: Text('Контакт')),
-                    PopupMenuItem(value: 'poll', child: Text('Опрос')),
+                    const PopupMenuItem(
+                      value: 'location',
+                      child: Text('Геопозиция'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'contact',
+                      child: Text('Контакт'),
+                    ),
+                    const PopupMenuItem(value: 'poll', child: Text('Опрос')),
+                    if (onSchedule != null)
+                      const PopupMenuItem(
+                        value: 'schedule',
+                        child: Text('Отложить сообщение'),
+                      ),
                   ],
                 ),
                 Expanded(

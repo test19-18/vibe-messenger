@@ -18,6 +18,8 @@ class ConversationSummary {
     this.notificationLevel = 'all',
     this.customTitle,
     this.draft,
+    this.autoDeleteSeconds,
+    this.protectedContent = false,
     this.folderIds = const {},
   });
 
@@ -37,6 +39,8 @@ class ConversationSummary {
   final String notificationLevel;
   final String? customTitle;
   final String? draft;
+  final int? autoDeleteSeconds;
+  final bool protectedContent;
   final Set<String> folderIds;
 
   bool get isMuted => muteUntil?.isAfter(DateTime.now()) ?? false;
@@ -92,6 +96,9 @@ class ConversationSummary {
       notificationLevel: _string(userSettings?['notification_level']) ?? 'all',
       customTitle: _string(userSettings?['custom_title']),
       draft: _string(userSettings?['draft']),
+      autoDeleteSeconds: (userSettings?['auto_delete_seconds'] as num?)
+          ?.toInt(),
+      protectedContent: userSettings?['protected_content'] as bool? ?? false,
       folderIds: Set.unmodifiable(folderIds),
     );
   }

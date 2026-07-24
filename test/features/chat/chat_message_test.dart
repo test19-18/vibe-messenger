@@ -12,11 +12,13 @@ void main() {
       'created_at': '2026-01-02T10:00:00Z',
       'edited_at': '2026-01-02T10:01:00Z',
       'deleted_at': null,
+      'expires_at': '2026-01-03T10:00:00Z',
     });
 
     expect(message.senderId, isNull);
     expect(message.replyToId, 'parent-id');
     expect(message.isEdited, isTrue);
     expect(message.visibleBody, 'Привет');
+    expect(message.expiresAt, DateTime.parse('2026-01-03T10:00:00Z').toLocal());
   });
 }

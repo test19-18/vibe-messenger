@@ -97,6 +97,22 @@ class MessageBubble extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  if (message.expiresAt != null) ...[
+                    Icon(
+                      Icons.timer_outlined,
+                      size: 13,
+                      color: foreground.withValues(alpha: 0.65),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      DateFormat('dd.MM HH:mm').format(message.expiresAt!),
+                      style: TextStyle(
+                        color: foreground.withValues(alpha: 0.65),
+                        fontSize: 10,
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                  ],
                   if (message.isEdited) ...[
                     Text(
                       'изменено',

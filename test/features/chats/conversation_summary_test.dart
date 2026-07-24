@@ -18,6 +18,8 @@ void main() {
         'notification_level': 'mentions',
         'custom_title': 'Работа',
         'draft': 'Набросок',
+        'auto_delete_seconds': 86400,
+        'protected_content': true,
       },
       folderIds: {'folder-id'},
     );
@@ -26,6 +28,8 @@ void main() {
     expect(summary.isArchived, isTrue);
     expect(summary.isPinned, isTrue);
     expect(summary.draft, 'Набросок');
+    expect(summary.autoDeleteSeconds, 86400);
+    expect(summary.protectedContent, isTrue);
     expect(summary.folderIds, contains('folder-id'));
   });
 }

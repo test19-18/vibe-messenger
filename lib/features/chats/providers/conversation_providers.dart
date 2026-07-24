@@ -6,6 +6,7 @@ import '../../auth/providers/auth_providers.dart';
 import '../data/conversation_repository.dart';
 import '../domain/chat_folder.dart';
 import '../domain/conversation_summary.dart';
+import '../domain/conversation_user_settings.dart';
 
 final conversationRepositoryProvider = Provider<ConversationRepository>((ref) {
   return ConversationRepository(ref.watch(supabaseClientProvider));
@@ -20,6 +21,22 @@ final conversationsProvider =
       return ref
           .watch(conversationRepositoryProvider)
           .listConversations(user.id);
+    });
+
+final conversationUserSettingsProvider = StreamProvider.autoDispose
+    .family<ConversationUserSettings, String>((ref, conversationId) {
+      final userId = ref.watch(currentUserProvider)?.id;
+      if (userId == null) {
+        return Stream.error(
+          const BackendUnavailableException('Сессия не найдена.'),
+        );
+      }
+      return ref
+          .watch(conversationRepositoryProvider)
+          .watchConversationSettings(
+            conversationId: conversationId,
+            userId: userId,
+          );
     });
 
 enum ChatListFilter { all, unread, direct, groups, archived }
@@ -113,6 +130,9 @@ class ConversationSettingsController extends StateNotifier<AsyncValue<void>> {
     String? notificationLevel,
     String? customTitle,
     String? draft,
+    int? autoDeleteSeconds,
+    bool clearAutoDelete = false,
+    bool? protectedContent,
   }) {
     return _run(
       () => repository.updateConversationSettings(
@@ -125,6 +145,26 @@ class ConversationSettingsController extends StateNotifier<AsyncValue<void>> {
         notificationLevel: notificationLevel,
         customTitle: customTitle,
         draft: draft,
+        autoDeleteSeconds: autoDeleteSeconds,
+        clearAutoDelete: clearAutoDelete,
+        protectedContent: protectedContent,
+      ),
+    );
+  }
+
+  Future<bool> updateExtensions({
+    required String conversationId,
+    int? autoDeleteSeconds,
+    bool clearAutoDelete = false,
+    bool? protectedContent,
+  }) {
+    return _run(
+      () => repository.updateConversationSettings(
+        conversationId: conversationId,
+        userId: _userId,
+        autoDeleteSeconds: autoDeleteSeconds,
+        clearAutoDelete: clearAutoDelete,
+        protectedContent: protectedContent,
       ),
     );
   }

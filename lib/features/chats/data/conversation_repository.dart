@@ -5,6 +5,7 @@ import '../../chat/domain/chat_message.dart';
 import '../../profile/domain/user_profile.dart';
 import '../domain/chat_folder.dart';
 import '../domain/conversation_summary.dart';
+import '../domain/conversation_user_settings.dart';
 
 class ConversationRepository {
   const ConversationRepository(this._client);
@@ -173,6 +174,30 @@ class ConversationRepository {
     return response;
   }
 
+  Stream<ConversationUserSettings> watchConversationSettings({
+    required String conversationId,
+    required String userId,
+  }) {
+    if (_client == null) {
+      return Stream.error(const BackendUnavailableException());
+    }
+    return _requiredClient
+        .from('conversation_user_settings')
+        .stream(primaryKey: ['conversation_id', 'user_id'])
+        .eq('conversation_id', conversationId)
+        .map((rows) {
+          final ownRows = rows
+              .where((row) => row['user_id'] == userId)
+              .toList();
+          return ownRows.isEmpty
+              ? ConversationUserSettings.defaults(
+                  conversationId: conversationId,
+                  userId: userId,
+                )
+              : ConversationUserSettings.fromMap(ownRows.single);
+        });
+  }
+
   Future<void> updateConversationSettings({
     required String conversationId,
     required String userId,
@@ -183,6 +208,9 @@ class ConversationRepository {
     String? notificationLevel,
     String? customTitle,
     String? draft,
+    int? autoDeleteSeconds,
+    bool clearAutoDelete = false,
+    bool? protectedContent,
   }) async {
     final values = <String, dynamic>{};
     if (archived != null) {
@@ -204,6 +232,20 @@ class ConversationRepository {
     }
     if (draft != null) {
       values['draft'] = _nullable(draft);
+    }
+    if (clearAutoDelete || autoDeleteSeconds != null) {
+      if (autoDeleteSeconds != null &&
+          (autoDeleteSeconds < 1 || autoDeleteSeconds > 31536000)) {
+        throw const FormatException(
+          'Таймер автоудаления должен быть от 1 секунды до 1 года.',
+        );
+      }
+      values['auto_delete_seconds'] = clearAutoDelete
+          ? null
+          : autoDeleteSeconds;
+    }
+    if (protectedContent != null) {
+      values['protected_content'] = protectedContent;
     }
     if (values.isEmpty) {
       return;

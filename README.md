@@ -2,7 +2,7 @@
 
 Flutter-мессенджер с Supabase backend и отдельным визуальным языком: почти чёрный фон, графитовые поверхности и электрик-синий акцент. Текущий клиент рассчитан на Flutter **3.44.8 / Dart 3.12**, Riverpod 2.6.1, go_router 14.8.1 и supabase_flutter 2.16.0, использует ручные mapper-модели и не требует codegen.
 
-> Миграция `supabase/migrations/202607240001_initial_schema.sql` прошла отдельный аудит и применена к выделенному Supabase-проекту «Вайб». Клиент использует только public URL и publishable key. **Service-role key запрещён в mobile build.**
+> Клиент синхронизирован с `supabase/migrations/202607240001_initial_schema.sql` и расширением `202607240002_product_extensions.sql`; SQL в этой итерации не менялся. Он использует только public URL и publishable key. **Service-role key запрещён в mobile build.**
 
 ## Реализовано в клиенте
 
@@ -12,12 +12,15 @@ Flutter-мессенджер с Supabase backend и отдельным визу�
 - lifecycle presence heartbeat, typing TTL, настройки видимости last seen/typing/read receipts;
 - direct chat через идемпотентный RPC;
 - список чатов: unread, pin, mute, archive, draft, папки и фильтры; channel rows намеренно скрыты;
-- сообщения: reply, edit, глобальный soft-delete, reactions, read markers, search, selection, copy и пересылка text/location/contact;
+- сообщения: reply, edit, глобальный soft-delete, delete-only-for-self через `message_user_deletions`, reactions, read markers, search, selection, copy и пересылка text/location/contact;
+- hidden/expired messages фильтруются в realtime-ленте клиента; для `expires_at` показывается срок действия;
+- отложенные text-сообщения: date/time picker, `silent`, realtime list и cancel через `create_scheduled_message` / `cancel_scheduled_message`;
 - простое форматирование `**bold**`, `_italic_`, `` `code` ``;
 - изображения/документы/аудио через приватные `chat-media`, voice через `voice-messages`, signed preview/download;
 - location/contact JSON payloads, запись `record` и воспроизведение `just_audio`;
 - groups: create/edit/avatar, owner/admin/member, moderation, targeted/link invites, join requests, ownership transfer;
-- member tags как **явно local-only** заметки: в текущей схеме нет серверного поля;
+- личные member tags синхронизируются сервером через `conversation_member_tags` и видны только создавшему их участнику;
+- per-chat `auto_delete_seconds` и `protected_content` доступны в меню беседы; новые сообщения получают server-derived `expires_at`;
 - polls: create RPC, vote/unvote и агрегированные результаты RPC;
 - настройки: system/light/dark, RU/EN для основной навигации и новых экранов, text scale, animations/power-saving;
 - локальный PIN hash и biometric gate через `shared_preferences` + `local_auth`;
@@ -44,7 +47,7 @@ flutter run \
 
 ### Нативная настройка Android
 
-`tool/configure_android.py` добавляет `RECORD_AUDIO`/`USE_BIOMETRIC`, переводит `MainActivity` на `FlutterFragmentActivity` и использует AppCompat launch theme — это требования выбранных `record`/`local_auth` версий. После генерации всё равно нужно проверить minSdk, runtime permission flow, biometric dialog, codec и `open_filex` intents на реальном Android-устройстве/OEM.
+`tool/configure_android.py` добавляет `RECORD_AUDIO`/`USE_BIOMETRIC`, переводит `MainActivity` на `FlutterFragmentActivity`, настраивает AppCompat launch theme, регистрирует схему ссылок `vibe://` и создаёт native MethodChannel `vibe/screen_protection`. Обработчик включает или снимает Android `FLAG_SECURE`, поэтому защищённые чаты блокируют активные системные screenshots; Dart lifecycle-cover остаётся дополнительной защитой. На реальном Android-устройстве всё равно проверяются runtime permissions, biometric dialog, voice codec и `open_filex` intents.
 
 ## Проверки
 
@@ -63,9 +66,10 @@ Workflow `.github/workflows/android.yml` закреплён на Flutter 3.44.8,
 Клиент использует audited schema из [`docs/DATABASE.md`](docs/DATABASE.md):
 
 - identity/social: `profiles`, `contacts`, `user_blocks`, `reports`, `user_presence`, `user_settings`, `user_devices`;
-- chats: `conversations`, `conversation_members`, `conversation_user_settings`, `chat_folders`, `chat_folder_conversations`;
-- messaging: `messages`, `message_attachments`, `message_reactions`, `conversation_read_receipts`, `conversation_typing`, `message_pins`;
-- groups: `group_invitations`, `group_join_requests` и group RPC;
+- chats: `conversations`, `conversation_members`, `conversation_user_settings` (`auto_delete_seconds`, `protected_content`), `chat_folders`, `chat_folder_conversations`;
+- messaging: `messages` (`expires_at`), `message_user_deletions`, `scheduled_messages`, `message_attachments`, `message_reactions`, `conversation_read_receipts`, `conversation_typing`, `message_pins`;
+- groups: `group_invitations`, `group_join_requests`, `conversation_member_tags` и group RPC;
+- scheduled/expiry RPC: `create_scheduled_message`, `cancel_scheduled_message`; Supabase Cron ежеминутно доставляет scheduled messages и каждые 5 минут очищает истёкшие сообщения;
 - polls: `polls`, `poll_options`, `poll_votes`, `create_poll`, `get_poll_results`;
 - private buckets: `avatars`, `chat-media`, `voice-messages`.
 

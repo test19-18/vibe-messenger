@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import '../data/message_repository.dart';
 import '../domain/chat_message.dart';
 import '../domain/message_details.dart';
+import '../domain/scheduled_message.dart';
 
 class MessageService {
   const MessageService(this._repository);
@@ -39,6 +40,39 @@ class MessageService {
 
   Future<void> delete({required String messageId, required String senderId}) {
     return _repository.softDelete(messageId: messageId, senderId: senderId);
+  }
+
+  Future<void> deleteForSelf({
+    required String conversationId,
+    required String messageId,
+    required String userId,
+  }) {
+    return _repository.deleteForSelf(
+      conversationId: conversationId,
+      messageId: messageId,
+      userId: userId,
+    );
+  }
+
+  Future<ScheduledMessage> schedule({
+    required String conversationId,
+    required String body,
+    required DateTime scheduledFor,
+    required bool silent,
+    String? replyToId,
+  }) {
+    final normalized = _validateBody(body);
+    return _repository.createScheduledMessage(
+      conversationId: conversationId,
+      body: normalized,
+      scheduledFor: scheduledFor,
+      silent: silent,
+      replyToId: replyToId,
+    );
+  }
+
+  Future<bool> cancelScheduledMessage(String scheduledMessageId) {
+    return _repository.cancelScheduledMessage(scheduledMessageId);
   }
 
   Future<void> markRead({
