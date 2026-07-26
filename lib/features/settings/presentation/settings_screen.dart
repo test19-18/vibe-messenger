@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_message.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/backend_status_banner.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -23,7 +24,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surfaceHigh,
+        backgroundColor: context.tokens.surfaceElevated,
         title: const Text('Выйти из аккаунта?'),
         content: const Text('Локальная сессия будет удалена с устройства.'),
         actions: [
@@ -33,9 +34,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
+            child: Text(
               'Выйти',
-              style: TextStyle(color: AppColors.danger),
+              style: TextStyle(color: context.tokens.danger),
             ),
           ),
         ],
@@ -82,9 +83,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               SwitchListTile.adaptive(
                 value: _notifications,
                 onChanged: (value) => setState(() => _notifications = value),
-                secondary: const _SettingsIcon(
+                secondary: _SettingsIcon(
                   icon: Icons.notifications_rounded,
-                  color: AppColors.electricBlue,
+                  color: context.tokens.accent,
                 ),
                 title: const Text('Уведомления'),
                 subtitle: const Text('Новые сообщения и звонки'),
@@ -95,9 +96,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onChanged: _notifications
                     ? (value) => setState(() => _messagePreview = value)
                     : null,
-                secondary: const _SettingsIcon(
+                secondary: _SettingsIcon(
                   icon: Icons.visibility_rounded,
-                  color: AppColors.purple,
+                  color: context.tokens.accentSecondary,
                 ),
                 title: const Text('Текст в уведомлении'),
                 subtitle: const Text('Показывать превью сообщения'),
@@ -111,40 +112,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               SwitchListTile.adaptive(
                 value: _compactMode,
                 onChanged: (value) => setState(() => _compactMode = value),
-                secondary: const _SettingsIcon(
+                secondary: _SettingsIcon(
                   icon: Icons.density_medium_rounded,
-                  color: AppColors.cyan,
+                  color: context.tokens.accentCyan,
                 ),
                 title: const Text('Компактные чаты'),
                 subtitle: const Text('Эксперимент этапа 1'),
               ),
               const Divider(indent: 70),
-              const VibeListTile(
+              VibeListTile(
                 icon: Icons.dark_mode_rounded,
-                iconColor: AppColors.pink,
+                iconColor: context.tokens.accentPink,
                 title: 'Тёмная тема',
                 subtitle: 'Фирменная тема Вайба',
                 trailing: Text(
                   'Всегда',
-                  style: TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: context.tokens.textSecondary),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
+          SizedBox(height: AppSpacing.lg),
           _SectionLabel(label: 'Безопасность и приложение'),
           SectionCard(
-            children: const [
+            children: [
               VibeListTile(
                 icon: Icons.shield_rounded,
-                iconColor: AppColors.success,
+                iconColor: context.tokens.success,
                 title: 'Конфиденциальность',
                 subtitle: 'RLS и пользовательская сессия',
               ),
               Divider(indent: 70),
               VibeListTile(
                 icon: Icons.info_rounded,
-                iconColor: AppColors.warning,
+                iconColor: context.tokens.warning,
                 title: 'О приложении',
                 subtitle: 'Вайб 0.1.0 · этап 1',
                 trailing: SizedBox.shrink(),
@@ -155,16 +156,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           OutlinedButton.icon(
             onPressed: authState.isLoading ? null : _signOut,
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.danger,
-              side: const BorderSide(color: AppColors.danger),
+              foregroundColor: context.tokens.danger,
+              side: BorderSide(color: context.tokens.danger),
             ),
             icon: authState.isLoading
-                ? const SizedBox(
+                ? SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.danger,
+                      color: context.tokens.danger,
                     ),
                   )
                 : const Icon(Icons.logout_rounded),
@@ -192,8 +193,8 @@ class _SectionLabel extends StatelessWidget {
       ),
       child: Text(
         label.toUpperCase(),
-        style: const TextStyle(
-          color: AppColors.textSecondary,
+        style: TextStyle(
+          color: context.tokens.textSecondary,
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.1,

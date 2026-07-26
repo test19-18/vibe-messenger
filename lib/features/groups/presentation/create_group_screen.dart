@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/errors/error_message.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../providers/group_providers.dart';
 
 class CreateGroupScreen extends ConsumerStatefulWidget {
@@ -58,10 +59,10 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
           child: ListView(
             padding: const EdgeInsets.all(AppSpacing.lg),
             children: [
-              const Icon(
+              Icon(
                 Icons.groups_rounded,
                 size: 72,
-                color: AppColors.electricBlue,
+                color: context.tokens.accent,
               ),
               const SizedBox(height: AppSpacing.lg),
               TextFormField(

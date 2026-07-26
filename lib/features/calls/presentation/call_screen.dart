@@ -6,6 +6,7 @@ import 'package:livekit_client/livekit_client.dart';
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../profile/domain/user_profile.dart';
@@ -65,7 +66,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
         : _getCallerName(session, peerProfile);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.tokens.background,
       body: SafeArea(
         child: session.type == CallType.video
             ? _VideoCallBody(
@@ -251,7 +252,7 @@ class _VideoCallBodyState extends ConsumerState<_VideoCallBody> {
                 Text(
                   _formatDuration(widget.elapsedSeconds),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.textSecondary,
+                    color: context.tokens.textSecondary,
                   ),
                 ),
             ],
@@ -272,7 +273,7 @@ class _VideoCallBodyState extends ConsumerState<_VideoCallBody> {
               else
                 Positioned.fill(
                   child: Container(
-                    color: AppColors.surface,
+                    color: context.tokens.surface,
                     child: Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -438,23 +439,23 @@ class _ControlButton extends StatelessWidget {
           height: 56,
           decoration: BoxDecoration(
             color: active
-                ? AppColors.electricBlue.withValues(alpha: 0.2)
-                : AppColors.surfaceHigh,
+                ? context.tokens.accent.withValues(alpha: 0.2)
+                : context.tokens.surfaceElevated,
             shape: BoxShape.circle,
             border: active
-                ? Border.all(color: AppColors.electricBlue, width: 1.5)
+                ? Border.all(color: context.tokens.accent, width: 1.5)
                 : null,
           ),
           child: IconButton(
             onPressed: onPressed,
-            icon: Icon(icon, color: AppColors.textPrimary, size: 24),
+            icon: Icon(icon, color: context.tokens.textPrimary, size: 24),
           ),
         ),
         const SizedBox(height: AppSpacing.xxs),
         Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
+            color: context.tokens.textSecondary,
             fontSize: 11,
           ),
         ),
@@ -476,8 +477,8 @@ class _EndCallButton extends StatelessWidget {
         Container(
           width: 64,
           height: 64,
-          decoration: const BoxDecoration(
-            color: AppColors.danger,
+          decoration: BoxDecoration(
+            color: context.tokens.danger,
             shape: BoxShape.circle,
           ),
           child: IconButton(
@@ -493,7 +494,7 @@ class _EndCallButton extends StatelessWidget {
         Text(
           context.tr(ru: 'Завершить', en: 'End'),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
+            color: context.tokens.textSecondary,
             fontSize: 11,
           ),
         ),

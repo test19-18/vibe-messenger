@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/vibe_tokens.dart';
 import '../../domain/chat_message.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -21,13 +22,13 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bubbleColor = message.isDeleted
-        ? AppColors.surfaceHigh
+        ? context.tokens.surfaceElevated
         : isMine
-        ? AppColors.electricBlue
-        : AppColors.surfaceHigh;
+        ? context.tokens.accent
+        : context.tokens.surfaceElevated;
     final foreground = message.isDeleted
-        ? AppColors.textSecondary
-        : AppColors.textPrimary;
+        ? context.tokens.textSecondary
+        : context.tokens.textPrimary;
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -53,7 +54,7 @@ class MessageBubble extends StatelessWidget {
             ),
             border: isMine || message.isDeleted
                 ? null
-                : Border.all(color: AppColors.divider),
+                : Border.all(color: context.tokens.separator),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

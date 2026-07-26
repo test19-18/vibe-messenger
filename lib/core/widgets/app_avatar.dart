@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
+import '../theme/vibe_tokens.dart';
 
+/// Circular gradient avatar with initials fallback.
+///
+/// The gradient is derived from [seed] (falling back to [label]) so a person
+/// keeps the same colours in the chat list, the conversation header and the
+/// contact sheet.
 class AppAvatar extends StatelessWidget {
   const AppAvatar({
     required this.label,
@@ -9,6 +14,9 @@ class AppAvatar extends StatelessWidget {
     this.imageUrl,
     this.radius = 24,
     this.seed,
+    this.isOnline = false,
+    this.showPresence = false,
+    this.presenceRingColor,
   });
 
   final String label;
@@ -16,14 +24,14 @@ class AppAvatar extends StatelessWidget {
   final double radius;
   final String? seed;
 
-  static const _palette = [
-    AppColors.electricBlue,
-    AppColors.purple,
-    AppColors.cyan,
-    AppColors.pink,
-    AppColors.success,
-    AppColors.warning,
-  ];
+  final bool isOnline;
+
+  /// Draws the presence dot even when offline (rendered muted).
+  final bool showPresence;
+
+  /// Colour of the ring punched around the presence dot — should match the
+  /// surface the avatar sits on so the dot reads as cut out of it.
+  final Color? presenceRingColor;
 
   String get _initials {
     final parts = label.trim().split(RegExp(r'\s+'));
@@ -37,50 +45,79 @@ class AppAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = context.tokens;
     final normalizedUrl = imageUrl?.trim();
-    final colorSeed = seed ?? label;
-    final color = _palette[colorSeed.hashCode.abs() % _palette.length];
+    final gradient = tokens.avatarGradientFor(seed ?? label);
+    final diameter = radius * 2;
 
-    return Container(
-      width: radius * 2,
-      height: radius * 2,
+    // Initials are decorative; the surrounding row already carries the name,
+    // and letting them scale would push them out of the circle.
+    final initials = Center(
+      child: Text(
+        _initials,
+        textScaler: TextScaler.noScaling,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: radius * 0.7,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+
+    final avatar = Container(
+      width: diameter,
+      height: diameter,
       decoration: BoxDecoration(
-        color: color,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: gradient,
+        ),
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.22),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: normalizedUrl == null || normalizedUrl.isEmpty
-          ? Center(
-              child: Text(
-                _initials,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: radius * 0.72,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            )
+          ? initials
           : Image.network(
               normalizedUrl,
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Center(
-                child: Text(
-                  _initials,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: radius * 0.72,
-                    fontWeight: FontWeight.w800,
-                  ),
+              errorBuilder: (context, error, stackTrace) => initials,
+              loadingBuilder: (context, child, progress) =>
+                  progress == null ? child : initials,
+            ),
+    );
+
+    if (!showPresence) {
+      return avatar;
+    }
+
+    final dotSize = (diameter * 0.28).clamp(10.0, 16.0);
+    return SizedBox(
+      width: diameter,
+      height: diameter,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          avatar,
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: dotSize,
+              height: dotSize,
+              decoration: BoxDecoration(
+                color: isOnline ? tokens.online : tokens.textTertiary,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: presenceRingColor ?? tokens.surface,
+                  width: dotSize * 0.18,
                 ),
               ),
             ),
+          ),
+        ],
+      ),
     );
   }
 }

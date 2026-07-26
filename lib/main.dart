@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
 import 'core/config/app_config.dart';
@@ -11,6 +12,11 @@ import 'features/notifications/services/firebase_init_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load date symbols for every supported locale so weekday and month names in
+  // the chat list and date separators follow the UI language instead of
+  // silently falling back to en_US.
+  await initializeDateFormatting();
 
   final backend = await AppConfig.initializeBackend();
 

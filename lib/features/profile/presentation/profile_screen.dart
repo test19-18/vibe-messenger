@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/error_message.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/validation/validators.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/async_state_view.dart';
@@ -21,7 +22,7 @@ class ProfileScreen extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.tokens.surface,
       showDragHandle: true,
       builder: (context) => _ProfileEditSheet(profile: profile),
     );
@@ -75,7 +76,7 @@ class ProfileScreen extends ConsumerWidget {
                   children: [
                     VibeListTile(
                       icon: Icons.alternate_email_rounded,
-                      iconColor: AppColors.electricBlue,
+                      iconColor: context.tokens.accent,
                       title: email.isEmpty ? 'Email не указан' : email,
                       subtitle: 'Email аккаунта',
                       trailing: const SizedBox.shrink(),
@@ -83,7 +84,7 @@ class ProfileScreen extends ConsumerWidget {
                     const Divider(indent: 70),
                     VibeListTile(
                       icon: Icons.badge_outlined,
-                      iconColor: AppColors.purple,
+                      iconColor: context.tokens.accentSecondary,
                       title: profile.handle.isEmpty
                           ? 'Имя пользователя не задано'
                           : profile.handle,
@@ -93,7 +94,7 @@ class ProfileScreen extends ConsumerWidget {
                     const Divider(indent: 70),
                     VibeListTile(
                       icon: Icons.info_outline_rounded,
-                      iconColor: AppColors.cyan,
+                      iconColor: context.tokens.accentCyan,
                       title: profile.bio?.trim().isNotEmpty == true
                           ? profile.bio!
                           : 'Расскажите немного о себе',
@@ -127,13 +128,13 @@ class _ProfileHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [AppColors.surfaceHigh, AppColors.surface],
+          colors: [context.tokens.surfaceElevated, context.tokens.surface],
         ),
         borderRadius: BorderRadius.circular(AppRadii.lg),
-        border: Border.all(color: AppColors.divider),
+        border: Border.all(color: context.tokens.separator),
       ),
       child: Column(
         children: [
@@ -159,8 +160,8 @@ class _ProfileHeader extends StatelessWidget {
             decoration: BoxDecoration(
               color:
                   (profile.isOnline
-                          ? AppColors.success
-                          : AppColors.textSecondary)
+                          ? context.tokens.success
+                          : context.tokens.textSecondary)
                       .withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(AppRadii.pill),
             ),
@@ -168,8 +169,8 @@ class _ProfileHeader extends StatelessWidget {
               profile.isOnline ? 'в сети' : 'профиль Вайба',
               style: TextStyle(
                 color: profile.isOnline
-                    ? AppColors.success
-                    : AppColors.textSecondary,
+                    ? context.tokens.success
+                    : context.tokens.textSecondary,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/error_message.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -96,7 +97,7 @@ class ContactsScreen extends ConsumerWidget {
                     itemBuilder: (context, index) {
                       final profile = profiles[index];
                       return Material(
-                        color: AppColors.surface,
+                        color: context.tokens.surface,
                         borderRadius: BorderRadius.circular(AppRadii.md),
                         child: ListTile(
                           enabled: !createState.isLoading,
@@ -124,10 +125,10 @@ class ContactsScreen extends ConsumerWidget {
                                     width: 13,
                                     height: 13,
                                     decoration: BoxDecoration(
-                                      color: AppColors.success,
+                                      color: context.tokens.success,
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: AppColors.surface,
+                                        color: context.tokens.surface,
                                         width: 2,
                                       ),
                                     ),

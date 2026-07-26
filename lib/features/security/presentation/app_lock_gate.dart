@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../providers/app_lock_providers.dart';
 
 class AppLockGate extends ConsumerStatefulWidget {
@@ -111,10 +112,10 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.lock_rounded,
                       size: 58,
-                      color: AppColors.electricBlue,
+                      color: context.tokens.accent,
                     ),
                     const SizedBox(height: AppSpacing.lg),
                     Text(
@@ -174,7 +175,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
                       const SizedBox(height: AppSpacing.md),
                       Text(
                         _error!,
-                        style: const TextStyle(color: AppColors.danger),
+                        style: TextStyle(color: context.tokens.danger),
                         textAlign: TextAlign.center,
                       ),
                     ],

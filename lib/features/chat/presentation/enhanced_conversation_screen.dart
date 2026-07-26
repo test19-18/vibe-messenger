@@ -10,7 +10,11 @@ import 'package:intl/intl.dart';
 import '../../../core/errors/error_message.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
+import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/async_state_view.dart';
+import '../../../core/widgets/chat_wallpaper.dart';
+import '../../../core/widgets/service_pill.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../calls/domain/call_models.dart';
 import '../../calls/providers/call_providers.dart';
@@ -459,9 +463,9 @@ class _EnhancedConversationScreenState
                                       ).notifier,
                                     )
                                     .cancelScheduled(message),
-                                icon: const Icon(
+                                icon: Icon(
                                   Icons.cancel_outlined,
-                                  color: AppColors.danger,
+                                  color: context.tokens.danger,
                                 ),
                                 tooltip: context.tr(
                                   ru: 'Отменить',
@@ -613,7 +617,7 @@ class _EnhancedConversationScreenState
                         (emoji) => ActionChip(
                           label: Text(emoji),
                           backgroundColor: selectedEmoji.contains(emoji)
-                              ? AppColors.electricBlueSoft
+                              ? context.tokens.accentSoft
                               : null,
                           onPressed: () {
                             Navigator.pop(sheetContext);
@@ -697,13 +701,13 @@ class _EnhancedConversationScreenState
               ),
               if (isMine)
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.delete_forever_outlined,
-                    color: AppColors.danger,
+                    color: context.tokens.danger,
                   ),
                   title: Text(
                     context.tr(ru: 'Удалить у всех', en: 'Delete for everyone'),
-                    style: const TextStyle(color: AppColors.danger),
+                    style: TextStyle(color: context.tokens.danger),
                   ),
                   onTap: () {
                     Navigator.pop(sheetContext);
@@ -779,7 +783,7 @@ class _EnhancedConversationScreenState
             onPressed: () => Navigator.pop(dialogContext, true),
             child: Text(
               context.tr(ru: 'Удалить', en: 'Delete'),
-              style: const TextStyle(color: AppColors.danger),
+              style: TextStyle(color: context.tokens.danger),
             ),
           ),
         ],
@@ -1544,6 +1548,16 @@ class _EnhancedConversationScreenState
 
     final selecting = _selectedIds.isNotEmpty;
     final messages = messageState.valueOrNull ?? const <ChatMessage>[];
+    final tokens = context.tokens;
+    final summary = ref
+        .watch(conversationsProvider)
+        .valueOrNull
+        ?.where((item) => item.id == widget.conversationId)
+        .firstOrNull;
+    final title = widget.title?.trim().isNotEmpty == true
+        ? widget.title!
+        : context.tr(ru: 'Беседа', en: 'Conversation');
+
     final screen = Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -1551,29 +1565,53 @@ class _EnhancedConversationScreenState
             ? IconButton(
                 onPressed: () => setState(_selectedIds.clear),
                 icon: const Icon(Icons.close_rounded),
+                tooltip: context.tr(ru: 'Снять выделение', en: 'Clear'),
               )
             : null,
         title: selecting
-            ? Text('${_selectedIds.length}')
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            ? Text(
+                '${_selectedIds.length}',
+                style: Theme.of(context).textTheme.titleLarge,
+              )
+            : Row(
                 children: [
-                  Text(
-                    widget.title?.trim().isNotEmpty == true
-                        ? widget.title!
-                        : context.tr(ru: 'Беседа', en: 'Conversation'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge,
+                  AppAvatar(
+                    label: title,
+                    imageUrl: summary?.visibleAvatarUrl,
+                    seed: widget.conversationId,
+                    radius: 19,
                   ),
-                  Text(
-                    typingUsers.isNotEmpty
-                        ? context.tr(ru: 'печатает…', en: 'typing…')
-                        : context.tr(ru: 'в Вайбе', en: 'on Vibe'),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: typingUsers.isNotEmpty
-                          ? AppColors.electricBlue
-                          : null,
+                  const SizedBox(width: AppSpacing.xs + 2),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        Text(
+                          _presenceLabel(
+                            context,
+                            isTyping: typingUsers.isNotEmpty,
+                            isGroup: widget.isGroup,
+                            peerOnline: summary?.peer?.isOnline ?? false,
+                            peerLastSeen: summary?.peer?.lastSeenAt,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                fontSize: 12.5,
+                                color: typingUsers.isNotEmpty
+                                    ? tokens.accent
+                                    : tokens.textSecondary,
+                              ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1613,178 +1651,240 @@ class _EnhancedConversationScreenState
                 ),
               ],
       ),
-      body: Column(
-        children: [
-          if (conversationSettings?.autoDeleteEnabled == true ||
-              conversationSettings?.protectedContent == true)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.xs,
-              ),
-              color: AppColors.warning.withValues(alpha: 0.14),
-              child: Row(
-                children: [
-                  const Icon(Icons.shield_outlined, size: 18),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      [
-                        if (conversationSettings?.autoDeleteEnabled == true)
-                          '${context.tr(ru: 'Автоудаление', en: 'Auto-delete')}: '
-                              '${_autoDeleteLabel(context, conversationSettings!.autoDeleteSeconds)}',
-                        if (conversationSettings?.protectedContent == true)
-                          _screenProtectionMode == ScreenProtectionMode.native
-                              ? context.tr(
-                                  ru: 'Защита снимков экрана активна',
-                                  en: 'Screenshot protection active',
-                                )
-                              : context.tr(
-                                  ru: 'Защита экрана best effort: нужен Android host wiring',
-                                  en: 'Best-effort screen protection: Android host wiring required',
-                                ),
-                      ].join(' · '),
-                      style: Theme.of(context).textTheme.bodySmall,
+      body: ChatWallpaper(
+        child: Column(
+          children: [
+            if (conversationSettings?.autoDeleteEnabled == true ||
+                conversationSettings?.protectedContent == true)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.xs,
+                ),
+                color: tokens.warning.withValues(alpha: 0.16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 18,
+                      color: tokens.textPrimary,
                     ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        [
+                          if (conversationSettings?.autoDeleteEnabled == true)
+                            '${context.tr(ru: 'Автоудаление', en: 'Auto-delete')}: '
+                                '${_autoDeleteLabel(context, conversationSettings!.autoDeleteSeconds)}',
+                          if (conversationSettings?.protectedContent == true)
+                            _screenProtectionMode == ScreenProtectionMode.native
+                                ? context.tr(
+                                    ru: 'Защита снимков экрана активна',
+                                    en: 'Screenshot protection active',
+                                  )
+                                : context.tr(
+                                    ru: 'Защита экрана best effort: нужен Android host wiring',
+                                    en: 'Best-effort screen protection: Android host wiring required',
+                                  ),
+                        ].join(' · '),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (pinnedIds.isNotEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: tokens.appBar,
+                  border: Border(
+                    bottom: BorderSide(color: tokens.divider, width: 0.5),
                   ),
-                ],
-              ),
-            ),
-          if (pinnedIds.isNotEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.xs,
-              ),
-              color: AppColors.electricBlueSoft,
-              child: Text(
-                '${context.tr(ru: 'Закреплено', en: 'Pinned')}: ${pinnedIds.length}',
-              ),
-            ),
-          Expanded(
-            child: AsyncStateView<List<ChatMessage>>(
-              value: messageState,
-              isEmpty: (items) => items.isEmpty,
-              emptyTitle: context.tr(
-                ru: 'Начните разговор',
-                en: 'Start a conversation',
-              ),
-              emptyMessage: context.tr(
-                ru: 'Первое сообщение задаёт настроение.',
-                en: 'The first message sets the tone.',
-              ),
-              onRetry: () =>
-                  ref.invalidate(messagesProvider(widget.conversationId)),
-              dataBuilder: (context, items) {
-                final byId = {for (final message in items) message.id: message};
-                final indexById = {
-                  for (var index = 0; index < items.length; index++)
-                    items[index].id: index,
-                };
-                return ListView.builder(
-                  reverse: true,
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final message = items[items.length - 1 - index];
-                    final isMine = message.senderId == currentUserId;
-                    final messageReactions = reactions
-                        .where((reaction) => reaction.messageId == message.id)
-                        .toList();
-                    final read =
-                        isMine &&
-                        receipts.any((receipt) {
-                          if (receipt.userId == currentUserId) {
-                            return false;
-                          }
-                          final marker = receipt.lastReadMessageId;
-                          if (marker != null &&
-                              indexById[marker] != null &&
-                              indexById[message.id] != null) {
-                            return indexById[marker]! >= indexById[message.id]!;
-                          }
-                          return receipt.lastReadAt.isAfter(message.createdAt);
-                        });
-                    return EnhancedMessageBubble(
-                      message: message,
-                      replyMessage: byId[message.replyToId],
-                      attachment: attachments[message.id],
-                      poll: polls[message.id],
-                      isMine: isMine,
-                      selected: _selectedIds.contains(message.id),
-                      isRead: read,
-                      pinned: pinnedIds.contains(message.id),
-                      reactions: messageReactions,
-                      currentUserId: currentUserId,
-                      onTap: selecting
-                          ? () => _toggleSelection(message)
-                          : () {},
-                      onLongPress: () => selecting
-                          ? _toggleSelection(message)
-                          : _showMessageActions(
-                              message,
-                              isMine: isMine,
-                              reactions: reactions,
-                              pinned: pinnedIds.contains(message.id),
+                ),
+                child: Row(
+                  children: [
+                    Container(width: 2.5, height: 28, color: tokens.accent),
+                    const SizedBox(width: AppSpacing.xs),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            context.tr(
+                              ru: 'Закреплённые сообщения',
+                              en: 'Pinned messages',
                             ),
-                      onReaction: (emoji) => ref
-                          .read(
-                            messageMutationProvider(
-                              widget.conversationId,
-                            ).notifier,
-                          )
-                          .toggleReaction(
-                            message: message,
-                            emoji: emoji,
-                            selected: messageReactions.any(
-                              (reaction) =>
-                                  reaction.emoji == emoji &&
-                                  reaction.userId == currentUserId,
+                            style: TextStyle(
+                              color: tokens.accent,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                      onVote: (option) {
-                        final poll = polls[message.id];
-                        if (poll != null) {
-                          ref
-                              .read(
-                                pollMutationProvider(
-                                  widget.conversationId,
-                                ).notifier,
-                              )
-                              .vote(poll, option);
-                        }
-                      },
-                      onDownload: (attachment) => ref
-                          .read(messageRepositoryProvider)
-                          .downloadAttachment(attachment),
-                    );
-                  },
-                );
-              },
+                          Text(
+                            '${pinnedIds.length}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.push_pin_rounded,
+                      size: 18,
+                      color: tokens.textSecondary,
+                    ),
+                  ],
+                ),
+              ),
+            Expanded(
+              child: AsyncStateView<List<ChatMessage>>(
+                value: messageState,
+                isEmpty: (items) => items.isEmpty,
+                emptyTitle: context.tr(
+                  ru: 'Начните разговор',
+                  en: 'Start a conversation',
+                ),
+                emptyMessage: context.tr(
+                  ru: 'Первое сообщение задаёт настроение.',
+                  en: 'The first message sets the tone.',
+                ),
+                onRetry: () =>
+                    ref.invalidate(messagesProvider(widget.conversationId)),
+                dataBuilder: (context, items) {
+                  final byId = {
+                    for (final message in items) message.id: message,
+                  };
+                  final indexById = {
+                    for (var index = 0; index < items.length; index++)
+                      items[index].id: index,
+                  };
+                  final entries = _buildTimeline(items);
+                  return ListView.builder(
+                    reverse: true,
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.xs,
+                      horizontal: AppSpacing.xs,
+                    ),
+                    itemCount: entries.length,
+                    itemBuilder: (context, index) {
+                      // The list is reversed so newest sits at the bottom, but
+                      // the timeline is built oldest-first for grouping.
+                      final entry = entries[entries.length - 1 - index];
+                      final dayStart = entry.dayHeader;
+                      if (dayStart != null) {
+                        return ServicePill(
+                          label: _formatDayHeader(context, dayStart),
+                        );
+                      }
+                      final message = entry.message!;
+                      final isMine = message.senderId == currentUserId;
+                      final messageReactions = reactions
+                          .where((reaction) => reaction.messageId == message.id)
+                          .toList();
+                      final read =
+                          isMine &&
+                          receipts.any((receipt) {
+                            if (receipt.userId == currentUserId) {
+                              return false;
+                            }
+                            final marker = receipt.lastReadMessageId;
+                            if (marker != null &&
+                                indexById[marker] != null &&
+                                indexById[message.id] != null) {
+                              return indexById[marker]! >=
+                                  indexById[message.id]!;
+                            }
+                            return receipt.lastReadAt.isAfter(
+                              message.createdAt,
+                            );
+                          });
+                      return EnhancedMessageBubble(
+                        message: message,
+                        replyMessage: byId[message.replyToId],
+                        attachment: attachments[message.id],
+                        poll: polls[message.id],
+                        isMine: isMine,
+                        selected: _selectedIds.contains(message.id),
+                        isRead: read,
+                        pinned: pinnedIds.contains(message.id),
+                        showTail: entry.showTail,
+                        isFirstInGroup: entry.isFirstInGroup,
+                        reactions: messageReactions,
+                        currentUserId: currentUserId,
+                        onTap: selecting
+                            ? () => _toggleSelection(message)
+                            : () {},
+                        onLongPress: () => selecting
+                            ? _toggleSelection(message)
+                            : _showMessageActions(
+                                message,
+                                isMine: isMine,
+                                reactions: reactions,
+                                pinned: pinnedIds.contains(message.id),
+                              ),
+                        onReaction: (emoji) => ref
+                            .read(
+                              messageMutationProvider(
+                                widget.conversationId,
+                              ).notifier,
+                            )
+                            .toggleReaction(
+                              message: message,
+                              emoji: emoji,
+                              selected: messageReactions.any(
+                                (reaction) =>
+                                    reaction.emoji == emoji &&
+                                    reaction.userId == currentUserId,
+                              ),
+                            ),
+                        onVote: (option) {
+                          final poll = polls[message.id];
+                          if (poll != null) {
+                            ref
+                                .read(
+                                  pollMutationProvider(
+                                    widget.conversationId,
+                                  ).notifier,
+                                )
+                                .vote(poll, option);
+                          }
+                        },
+                        onDownload: (attachment) => ref
+                            .read(messageRepositoryProvider)
+                            .downloadAttachment(attachment),
+                      );
+                    },
+                  );
+                },
+              ),
             ),
-          ),
-          MessageComposer(
-            controller: _composerController,
-            focusNode: _composerFocusNode,
-            isSending: mutationState.isLoading,
-            replyTo: _replyTo,
-            editing: _editing,
-            onCancelContext: _clearComposerContext,
-            onChanged: _handleTyping,
-            onSend: _submit,
-            onAttach: _pickAttachment,
-            onLocation: _sendLocation,
-            onContact: _sendContact,
-            onPoll: _createPoll,
-            onSchedule: _scheduleCurrentMessage,
-            onVoiceToggle: _toggleRecording,
-            isRecording: _recording,
-          ),
-        ],
+            MessageComposer(
+              controller: _composerController,
+              focusNode: _composerFocusNode,
+              isSending: mutationState.isLoading,
+              replyTo: _replyTo,
+              editing: _editing,
+              onCancelContext: _clearComposerContext,
+              onChanged: _handleTyping,
+              onSend: _submit,
+              onAttach: _pickAttachment,
+              onLocation: _sendLocation,
+              onContact: _sendContact,
+              onPoll: _createPoll,
+              onSchedule: _scheduleCurrentMessage,
+              onVoiceToggle: _toggleRecording,
+              isRecording: _recording,
+            ),
+          ],
+        ),
       ),
     );
     return Stack(
@@ -1792,19 +1892,149 @@ class _EnhancedConversationScreenState
       children: [
         screen,
         if (_protectedContent && _privacyCover)
-          const ColoredBox(
-            color: AppColors.background,
+          ColoredBox(
+            color: tokens.background,
             child: Center(
-              child: Icon(
-                Icons.shield_rounded,
-                size: 56,
-                color: AppColors.electricBlue,
-              ),
+              child: Icon(Icons.shield_rounded, size: 56, color: tokens.accent),
             ),
           ),
       ],
     );
   }
+}
+
+/// One row of the conversation: either a day separator or a message.
+class _TimelineEntry {
+  const _TimelineEntry.day(this.dayHeader)
+    : message = null,
+      showTail = false,
+      isFirstInGroup = false;
+
+  const _TimelineEntry.message(
+    this.message, {
+    required this.showTail,
+    required this.isFirstInGroup,
+  }) : dayHeader = null;
+
+  final DateTime? dayHeader;
+  final ChatMessage? message;
+
+  /// Last message of a same-sender streak — the one that draws the tail.
+  final bool showTail;
+
+  /// First message of a streak — gets the wider gap above it.
+  final bool isFirstInGroup;
+}
+
+/// Messages a sender posts in quick succession render as one block.
+const Duration _groupingWindow = Duration(minutes: 5);
+
+/// Expands a chronological message list into rows, inserting a day separator
+/// whenever the calendar date changes.
+List<_TimelineEntry> _buildTimeline(List<ChatMessage> messages) {
+  final entries = <_TimelineEntry>[];
+  DateTime? currentDay;
+
+  bool grouped(ChatMessage a, ChatMessage b) =>
+      a.senderId == b.senderId &&
+      a.kind != MessageKind.system &&
+      b.kind != MessageKind.system &&
+      b.createdAt.difference(a.createdAt).abs() <= _groupingWindow;
+
+  for (var index = 0; index < messages.length; index++) {
+    final message = messages[index];
+    final day = DateTime(
+      message.createdAt.year,
+      message.createdAt.month,
+      message.createdAt.day,
+    );
+    final startsNewDay = currentDay == null || day != currentDay;
+    if (startsNewDay) {
+      entries.add(_TimelineEntry.day(day));
+      currentDay = day;
+    }
+
+    final previous = index == 0 ? null : messages[index - 1];
+    final next = index == messages.length - 1 ? null : messages[index + 1];
+    final nextStartsNewDay =
+        next != null &&
+        DateTime(
+              next.createdAt.year,
+              next.createdAt.month,
+              next.createdAt.day,
+            ) !=
+            day;
+
+    entries.add(
+      _TimelineEntry.message(
+        message,
+        isFirstInGroup:
+            startsNewDay || previous == null || !grouped(previous, message),
+        showTail: next == null || nextStartsNewDay || !grouped(message, next),
+      ),
+    );
+  }
+  return entries;
+}
+
+/// "Today" / "Yesterday" / a date, matching the chat-list timestamp ladder.
+String _formatDayHeader(BuildContext context, DateTime day) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final daysApart = today.difference(day).inDays;
+  if (daysApart == 0) {
+    return context.tr(ru: 'Сегодня', en: 'Today');
+  }
+  if (daysApart == 1) {
+    return context.tr(ru: 'Вчера', en: 'Yesterday');
+  }
+  final locale = context.dateLocale;
+  return day.year == now.year
+      ? DateFormat('d MMMM', locale).format(day)
+      : DateFormat('d MMMM yyyy', locale).format(day);
+}
+
+/// Subtitle under the conversation title.
+String _presenceLabel(
+  BuildContext context, {
+  required bool isTyping,
+  required bool isGroup,
+  required bool peerOnline,
+  DateTime? peerLastSeen,
+}) {
+  if (isTyping) {
+    return context.tr(ru: 'печатает…', en: 'typing…');
+  }
+  if (isGroup) {
+    return context.tr(ru: 'группа', en: 'group');
+  }
+  if (peerOnline) {
+    return context.tr(ru: 'в сети', en: 'online');
+  }
+  if (peerLastSeen == null) {
+    return context.tr(ru: 'не в сети', en: 'offline');
+  }
+  final elapsed = DateTime.now().difference(peerLastSeen);
+  if (elapsed.inMinutes < 1) {
+    return context.tr(ru: 'был(а) только что', en: 'last seen just now');
+  }
+  if (elapsed.inHours < 1) {
+    return context.tr(
+      ru: 'был(а) ${elapsed.inMinutes} мин назад',
+      en: 'last seen ${elapsed.inMinutes} min ago',
+    );
+  }
+  if (elapsed.inDays < 1) {
+    return context.tr(
+      ru: 'был(а) ${elapsed.inHours} ч назад',
+      en: 'last seen ${elapsed.inHours} h ago',
+    );
+  }
+  final locale = context.dateLocale;
+  return context.tr(
+    ru: 'был(а) ${DateFormat('d MMM', locale).format(peerLastSeen)}',
+    en: 'last seen ${DateFormat('d MMM', locale).format(peerLastSeen)}',
+  );
 }
 
 String _mimeFor(String? extension) {

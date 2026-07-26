@@ -1,21 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/errors/error_message.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/widgets/app_avatar.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../domain/chat_folder.dart';
 import '../domain/conversation_summary.dart';
 import '../providers/conversation_providers.dart';
+import 'widgets/conversation_tile.dart';
 
-class ChatsHubScreen extends ConsumerWidget {
+class ChatsHubScreen extends ConsumerStatefulWidget {
   const ChatsHubScreen({super.key});
 
-  Future<void> _createFolder(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<ChatsHubScreen> createState() => _ChatsHubScreenState();
+}
+
+class _ChatsHubScreenState extends ConsumerState<ChatsHubScreen> {
+  final _searchController = TextEditingController();
+  bool _searching = false;
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searching = !_searching;
+      if (!_searching) {
+        _searchController.clear();
+        _query = '';
+      }
+    });
+  }
+
+  /// Title and last-message search over the already-loaded list, so typing
+  /// filters instantly instead of waiting on a round trip.
+  List<ConversationSummary> _applyQuery(List<ConversationSummary> items) {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) {
+      return items;
+    }
+    return items
+        .where(
+          (item) =>
+              item.visibleTitle.toLowerCase().contains(query) ||
+              (item.lastMessage?.toLowerCase().contains(query) ?? false),
+        )
+        .toList();
+  }
+
+  Future<void> _createFolder() async {
     final controller = TextEditingController();
     final create = await showDialog<bool>(
       context: context,
@@ -49,11 +90,7 @@ class ChatsHubScreen extends ConsumerWidget {
     controller.dispose();
   }
 
-  Future<void> _deleteFolder(
-    BuildContext context,
-    WidgetRef ref,
-    ChatFolder folder,
-  ) async {
+  Future<void> _deleteFolder(ChatFolder folder) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -68,7 +105,7 @@ class ChatsHubScreen extends ConsumerWidget {
             onPressed: () => Navigator.pop(dialogContext, true),
             child: Text(
               context.tr(ru: 'Удалить', en: 'Delete'),
-              style: const TextStyle(color: AppColors.danger),
+              style: TextStyle(color: context.tokens.danger),
             ),
           ),
         ],
@@ -85,15 +122,12 @@ class ChatsHubScreen extends ConsumerWidget {
   }
 
   Future<void> _showConversationActions(
-    BuildContext context,
-    WidgetRef ref,
     ConversationSummary conversation,
   ) async {
     final folders =
         ref.read(chatFoldersProvider).valueOrNull ?? const <ChatFolder>[];
     await showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: SingleChildScrollView(
           child: Column(
@@ -191,8 +225,47 @@ class ChatsHubScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _showComposeSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.person_add_alt_1_rounded),
+              title: Text(
+                context.tr(ru: 'Новый личный чат', en: 'New direct chat'),
+              ),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                context.go('/contacts');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.group_add_rounded),
+              title: Text(context.tr(ru: 'Создать группу', en: 'Create group')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                context.push('/groups/new');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.create_new_folder_outlined),
+              title: Text(context.tr(ru: 'Новая папка', en: 'New folder')),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _createFolder();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
     final conversations = ref.watch(filteredConversationsProvider);
     final folders =
         ref.watch(chatFoldersProvider).valueOrNull ?? const <ChatFolder>[];
@@ -211,119 +284,96 @@ class ChatsHubScreen extends ConsumerWidget {
     });
 
     return Scaffold(
+      backgroundColor: tokens.background,
       appBar: AppBar(
-        title: Text(context.tr(ru: 'Чаты', en: 'Chats')),
+        titleSpacing: _searching ? 0 : null,
+        title: _searching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                onChanged: (value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  hintText: context.tr(ru: 'Поиск чатов', en: 'Search chats'),
+                ),
+                style: Theme.of(context).textTheme.bodyLarge,
+              )
+            : Text(context.tr(ru: 'Чаты', en: 'Chats')),
         actions: [
           IconButton(
-            onPressed: () => ref.invalidate(conversationsProvider),
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: context.tr(ru: 'Обновить', en: 'Refresh'),
+            onPressed: _toggleSearch,
+            icon: Icon(_searching ? Icons.close_rounded : Icons.search_rounded),
+            tooltip: _searching
+                ? context.tr(ru: 'Закрыть поиск', en: 'Close search')
+                : context.tr(ru: 'Поиск', en: 'Search'),
           ),
-          IconButton(
-            onPressed: () => _createFolder(context, ref),
-            icon: const Icon(Icons.create_new_folder_outlined),
-            tooltip: context.tr(ru: 'Новая папка', en: 'New folder'),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          SizedBox(
-            height: 48,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              children: [
-                _FilterChip(
-                  label: context.tr(ru: 'Все', en: 'All'),
-                  selected: filter == ChatListFilter.all && folderId == null,
-                  onSelected: () {
-                    ref.read(chatListFilterProvider.notifier).state =
-                        ChatListFilter.all;
-                    ref.read(selectedChatFolderProvider.notifier).state = null;
-                  },
-                ),
-                _FilterChip(
-                  label: context.tr(ru: 'Непрочитанные', en: 'Unread'),
-                  selected: filter == ChatListFilter.unread && folderId == null,
-                  onSelected: () {
-                    ref.read(chatListFilterProvider.notifier).state =
-                        ChatListFilter.unread;
-                    ref.read(selectedChatFolderProvider.notifier).state = null;
-                  },
-                ),
-                _FilterChip(
-                  label: context.tr(ru: 'Личные', en: 'Direct'),
-                  selected: filter == ChatListFilter.direct && folderId == null,
-                  onSelected: () {
-                    ref.read(chatListFilterProvider.notifier).state =
-                        ChatListFilter.direct;
-                    ref.read(selectedChatFolderProvider.notifier).state = null;
-                  },
-                ),
-                _FilterChip(
-                  label: context.tr(ru: 'Группы', en: 'Groups'),
-                  selected: filter == ChatListFilter.groups && folderId == null,
-                  onSelected: () {
-                    ref.read(chatListFilterProvider.notifier).state =
-                        ChatListFilter.groups;
-                    ref.read(selectedChatFolderProvider.notifier).state = null;
-                  },
-                ),
-                _FilterChip(
-                  label: context.tr(ru: 'Архив', en: 'Archive'),
-                  selected:
-                      filter == ChatListFilter.archived && folderId == null,
-                  onSelected: () {
-                    ref.read(chatListFilterProvider.notifier).state =
-                        ChatListFilter.archived;
-                    ref.read(selectedChatFolderProvider.notifier).state = null;
-                  },
-                ),
-                for (final folder in folders)
-                  _FilterChip(
-                    label: folder.name,
-                    selected: folderId == folder.id,
-                    onSelected: () {
-                      ref.read(chatListFilterProvider.notifier).state =
-                          ChatListFilter.all;
-                      ref.read(selectedChatFolderProvider.notifier).state =
-                          folder.id;
-                    },
-                    onLongPress: () => _deleteFolder(context, ref, folder),
-                  ),
-              ],
+          if (!_searching)
+            IconButton(
+              onPressed: () => ref.invalidate(conversationsProvider),
+              icon: const Icon(Icons.refresh_rounded),
+              tooltip: context.tr(ru: 'Обновить', en: 'Refresh'),
             ),
-          ),
-          Expanded(
-            child: AsyncStateView<List<ConversationSummary>>(
-              value: conversations,
-              isEmpty: (items) => items.isEmpty,
-              emptyTitle: context.tr(
-                ru: 'Здесь пока тихо',
-                en: 'Nothing here yet',
-              ),
-              emptyMessage: context.tr(
+          const SizedBox(width: AppSpacing.xxs),
+        ],
+        bottom: _FolderTabs(
+          filter: filter,
+          folderId: folderId,
+          folders: folders,
+          onFilterSelected: (value) {
+            ref.read(chatListFilterProvider.notifier).state = value;
+            ref.read(selectedChatFolderProvider.notifier).state = null;
+          },
+          onFolderSelected: (folder) {
+            ref.read(chatListFilterProvider.notifier).state =
+                ChatListFilter.all;
+            ref.read(selectedChatFolderProvider.notifier).state = folder.id;
+          },
+          onFolderLongPress: _deleteFolder,
+        ),
+      ),
+      body: AsyncStateView<List<ConversationSummary>>(
+        value: conversations,
+        isEmpty: (items) => _applyQuery(items).isEmpty,
+        emptyTitle: _query.isEmpty
+            ? context.tr(ru: 'Здесь пока тихо', en: 'Nothing here yet')
+            : context.tr(ru: 'Ничего не найдено', en: 'No matches'),
+        emptyMessage: _query.isEmpty
+            ? context.tr(
                 ru: 'Создайте личный чат или группу.',
                 en: 'Start a direct chat or create a group.',
+              )
+            : context.tr(
+                ru: 'Попробуйте другой запрос.',
+                en: 'Try a different search.',
               ),
-              onRetry: () => ref.invalidate(conversationsProvider),
-              dataBuilder: (context, items) => RefreshIndicator(
-                onRefresh: () => ref.refresh(conversationsProvider.future),
+        onRetry: () => ref.invalidate(conversationsProvider),
+        dataBuilder: (context, items) {
+          final visible = _applyQuery(items);
+          return RefreshIndicator(
+            onRefresh: () => ref.refresh(conversationsProvider.future),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(
+                  maxWidth: AppSizes.contentMaxWidth,
+                ),
                 child: ListView.separated(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    AppSpacing.xs,
-                    AppSpacing.md,
-                    110,
+                  // Leaves room for the compose button over the last row.
+                  padding: const EdgeInsets.only(bottom: 88),
+                  itemCount: visible.length,
+                  separatorBuilder: (_, _) => Divider(
+                    height: 0.5,
+                    indent: AppSizes.chatListSeparatorInset,
+                    color: tokens.separator,
                   ),
-                  itemCount: items.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: AppSpacing.xs),
                   itemBuilder: (context, index) {
-                    final conversation = items[index];
-                    return _ConversationTile(
+                    final conversation = visible[index];
+                    return ConversationTile(
                       conversation: conversation,
                       onTap: () => context.pushNamed(
                         'conversation',
@@ -333,160 +383,148 @@ class ChatsHubScreen extends ConsumerWidget {
                           'group': '${conversation.isGroup}',
                         },
                       ),
-                      onLongPress: () =>
-                          _showConversationActions(context, ref, conversation),
+                      onLongPress: () => _showConversationActions(conversation),
                     );
                   },
                 ),
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => showModalBottomSheet<void>(
-          context: context,
-          showDragHandle: true,
-          builder: (sheetContext) => SafeArea(
-            child: Wrap(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.person_add_alt_1_rounded),
-                  title: Text(
-                    context.tr(ru: 'Новый личный чат', en: 'New direct chat'),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    context.go('/contacts');
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.group_add_rounded),
-                  title: Text(
-                    context.tr(ru: 'Создать группу', en: 'Create group'),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    context.push('/groups/new');
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-        child: const Icon(Icons.add_rounded),
+        onPressed: _showComposeSheet,
+        tooltip: context.tr(ru: 'Новый чат', en: 'New chat'),
+        child: const Icon(Icons.edit_rounded),
       ),
     );
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
+/// Scrollable strip of chat filters and user folders under the app bar.
+class _FolderTabs extends StatelessWidget implements PreferredSizeWidget {
+  const _FolderTabs({
+    required this.filter,
+    required this.folderId,
+    required this.folders,
+    required this.onFilterSelected,
+    required this.onFolderSelected,
+    required this.onFolderLongPress,
+  });
+
+  final ChatListFilter filter;
+  final String? folderId;
+  final List<ChatFolder> folders;
+  final ValueChanged<ChatListFilter> onFilterSelected;
+  final ValueChanged<ChatFolder> onFolderSelected;
+  final ValueChanged<ChatFolder> onFolderLongPress;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(44);
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    final labels = <ChatListFilter, String>{
+      ChatListFilter.all: context.tr(ru: 'Все', en: 'All'),
+      ChatListFilter.unread: context.tr(ru: 'Непрочитанные', en: 'Unread'),
+      ChatListFilter.direct: context.tr(ru: 'Личные', en: 'Direct'),
+      ChatListFilter.groups: context.tr(ru: 'Группы', en: 'Groups'),
+      ChatListFilter.archived: context.tr(ru: 'Архив', en: 'Archive'),
+    };
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: tokens.divider, width: 0.5)),
+      ),
+      child: SizedBox(
+        height: 44,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+          children: [
+            for (final entry in labels.entries)
+              _Tab(
+                label: entry.value,
+                selected: filter == entry.key && folderId == null,
+                onTap: () => onFilterSelected(entry.key),
+              ),
+            for (final folder in folders)
+              _Tab(
+                label: folder.name,
+                selected: folderId == folder.id,
+                onTap: () => onFolderSelected(folder),
+                onLongPress: () => onFolderLongPress(folder),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A single tab with an underline indicator that slides in on selection.
+class _Tab extends StatelessWidget {
+  const _Tab({
     required this.label,
     required this.selected,
-    required this.onSelected,
+    required this.onTap,
     this.onLongPress,
   });
 
   final String label;
   final bool selected;
-  final VoidCallback onSelected;
+  final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: AppSpacing.xs),
-      child: GestureDetector(
-        onLongPress: onLongPress,
-        child: ChoiceChip(
-          label: Text(label),
-          selected: selected,
-          onSelected: (_) => onSelected(),
-        ),
-      ),
-    );
-  }
-}
-
-class _ConversationTile extends StatelessWidget {
-  const _ConversationTile({
-    required this.conversation,
-    required this.onTap,
-    required this.onLongPress,
-  });
-
-  final ConversationSummary conversation;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-
-  @override
-  Widget build(BuildContext context) {
-    final timestamp = conversation.lastMessageAt ?? conversation.updatedAt;
-    final now = DateTime.now();
-    final sameDay =
-        now.year == timestamp.year &&
-        now.month == timestamp.month &&
-        now.day == timestamp.day;
-    final time = sameDay
-        ? DateFormat('HH:mm').format(timestamp)
-        : DateFormat('dd.MM').format(timestamp);
-    final draft = conversation.draft?.trim();
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
+    final tokens = context.tokens;
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.xs,
-        ),
-        leading: AppAvatar(
-          label: conversation.visibleTitle,
-          imageUrl: conversation.visibleAvatarUrl,
-          seed: conversation.id,
-          radius: 27,
-        ),
-        title: Row(
-          children: [
-            if (conversation.isPinned)
-              const Padding(
-                padding: EdgeInsets.only(right: 4),
-                child: Icon(Icons.push_pin_rounded, size: 15),
-              ),
-            Expanded(
-              child: Text(
-                conversation.visibleTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 64),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            // The underline matches the label width, so it needs the column to
+            // be sized by its widest child rather than by the viewport.
+            child: IntrinsicWidth(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Spacer(),
+                  Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected ? tokens.accent : tokens.textSecondary,
+                    ),
+                  ),
+                  const Spacer(),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: selected ? tokens.accent : Colors.transparent,
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(3),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            if (conversation.isMuted)
-              const Icon(Icons.volume_off_rounded, size: 16),
-            const SizedBox(width: AppSpacing.xs),
-            Text(time, style: Theme.of(context).textTheme.bodySmall),
-          ],
+          ),
         ),
-        subtitle: Text(
-          draft?.isNotEmpty == true
-              ? '${context.tr(ru: 'Черновик', en: 'Draft')}: $draft'
-              : conversation.lastMessage ??
-                    context.tr(ru: 'Новая беседа', en: 'New conversation'),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: draft?.isNotEmpty == true
-              ? const TextStyle(color: AppColors.danger)
-              : null,
-        ),
-        trailing: conversation.unreadCount == 0
-            ? null
-            : Badge(
-                label: Text(
-                  conversation.unreadCount > 99
-                      ? '99+'
-                      : '${conversation.unreadCount}',
-                ),
-              ),
       ),
     );
   }

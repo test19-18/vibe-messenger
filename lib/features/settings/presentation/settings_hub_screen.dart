@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/errors/error_message.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/backend_status_banner.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -32,7 +33,7 @@ class SettingsHubScreen extends ConsumerWidget {
             onPressed: () => Navigator.pop(dialogContext, true),
             child: Text(
               context.tr(ru: 'Выйти', en: 'Sign out'),
-              style: const TextStyle(color: AppColors.danger),
+              style: TextStyle(color: context.tokens.danger),
             ),
           ),
         ],
@@ -77,7 +78,7 @@ class SettingsHubScreen extends ConsumerWidget {
             children: [
               VibeListTile(
                 icon: Icons.notifications_rounded,
-                iconColor: AppColors.electricBlue,
+                iconColor: context.tokens.accent,
                 title: context.tr(ru: 'Уведомления', en: 'Notifications'),
                 subtitle: context.tr(
                   ru: 'Push, каналы, разрешение',
@@ -88,7 +89,7 @@ class SettingsHubScreen extends ConsumerWidget {
               const Divider(indent: 70),
               VibeListTile(
                 icon: Icons.lock_person_rounded,
-                iconColor: AppColors.success,
+                iconColor: context.tokens.success,
                 title: context.tr(ru: 'Конфиденциальность', en: 'Privacy'),
                 subtitle: context.tr(
                   ru: 'Presence, typing и read receipts',
@@ -99,7 +100,7 @@ class SettingsHubScreen extends ConsumerWidget {
               const Divider(indent: 70),
               VibeListTile(
                 icon: Icons.palette_rounded,
-                iconColor: AppColors.pink,
+                iconColor: context.tokens.accentPink,
                 title: context.tr(ru: 'Оформление', en: 'Appearance'),
                 subtitle: context.tr(
                   ru: 'Тема, RU/EN, текст и анимации',
@@ -110,7 +111,7 @@ class SettingsHubScreen extends ConsumerWidget {
               const Divider(indent: 70),
               VibeListTile(
                 icon: Icons.storage_rounded,
-                iconColor: AppColors.cyan,
+                iconColor: context.tokens.accentCyan,
                 title: context.tr(
                   ru: 'Данные и память',
                   en: 'Data and storage',
@@ -128,7 +129,7 @@ class SettingsHubScreen extends ConsumerWidget {
             children: [
               VibeListTile(
                 icon: Icons.phone_in_talk_rounded,
-                iconColor: AppColors.success,
+                iconColor: context.tokens.success,
                 title: context.tr(ru: 'Звонки', en: 'Calls'),
                 subtitle: context.tr(
                   ru: 'История аудио/видеозвонков',
@@ -139,7 +140,7 @@ class SettingsHubScreen extends ConsumerWidget {
               const Divider(indent: 70),
               VibeListTile(
                 icon: Icons.phonelink_lock_rounded,
-                iconColor: AppColors.purple,
+                iconColor: context.tokens.accentSecondary,
                 title: context.tr(ru: 'Блокировка приложения', en: 'App lock'),
                 subtitle: context.tr(
                   ru: 'Локальный PIN и биометрия',
@@ -150,7 +151,7 @@ class SettingsHubScreen extends ConsumerWidget {
               const Divider(indent: 70),
               VibeListTile(
                 icon: Icons.devices_rounded,
-                iconColor: AppColors.warning,
+                iconColor: context.tokens.warning,
                 title: context.tr(
                   ru: 'Устройства и сессии',
                   en: 'Devices and sessions',
@@ -164,7 +165,7 @@ class SettingsHubScreen extends ConsumerWidget {
               const Divider(indent: 70),
               VibeListTile(
                 icon: Icons.group_add_rounded,
-                iconColor: AppColors.electricBlue,
+                iconColor: context.tokens.accent,
                 title: context.tr(ru: 'Вступить в группу', en: 'Join a group'),
                 subtitle: context.tr(
                   ru: 'Приглашения, token и заявки',
@@ -175,11 +176,11 @@ class SettingsHubScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          const SectionCard(
+          SectionCard(
             children: [
               VibeListTile(
                 icon: Icons.info_rounded,
-                iconColor: AppColors.textSecondary,
+                iconColor: context.tokens.textSecondary,
                 title: 'Вайб 0.2.0',
                 subtitle: 'Flutter + Supabase · без service-role/Firebase SDK',
                 trailing: SizedBox.shrink(),
@@ -192,8 +193,8 @@ class SettingsHubScreen extends ConsumerWidget {
                 ? null
                 : () => _signOut(context, ref),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.danger,
-              side: const BorderSide(color: AppColors.danger),
+              foregroundColor: context.tokens.danger,
+              side: BorderSide(color: context.tokens.danger),
             ),
             icon: signOutState.isLoading
                 ? const SizedBox(

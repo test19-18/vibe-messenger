@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/error_message.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../domain/chat_message.dart';
@@ -125,7 +126,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     }
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: AppColors.surfaceHigh,
+      backgroundColor: context.tokens.surfaceElevated,
       showDragHandle: true,
       builder: (sheetContext) {
         return SafeArea(
@@ -150,13 +151,13 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
                 ),
               if (isMine)
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Icons.delete_outline_rounded,
-                    color: AppColors.danger,
+                    color: context.tokens.danger,
                   ),
-                  title: const Text(
+                  title: Text(
                     'Удалить',
-                    style: TextStyle(color: AppColors.danger),
+                    style: TextStyle(color: context.tokens.danger),
                   ),
                   onTap: () async {
                     Navigator.pop(sheetContext);
@@ -174,7 +175,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.surfaceHigh,
+        backgroundColor: context.tokens.surfaceElevated,
         title: const Text('Удалить сообщение?'),
         content: const Text('Вместо текста останется отметка об удалении.'),
         actions: [
@@ -184,9 +185,9 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
+            child: Text(
               'Удалить',
-              style: TextStyle(color: AppColors.danger),
+              style: TextStyle(color: context.tokens.danger),
             ),
           ),
         ],
@@ -248,8 +249,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               typingUsers.isNotEmpty ? 'печатает…' : 'в Вайбе',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: typingUsers.isNotEmpty
-                    ? AppColors.electricBlue
-                    : AppColors.textSecondary,
+                    ? context.tokens.accent
+                    : context.tokens.textSecondary,
                 fontSize: 12,
               ),
             ),

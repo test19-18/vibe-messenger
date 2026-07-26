@@ -6,6 +6,7 @@ import '../../../core/errors/error_message.dart';
 import '../../../core/providers/backend_providers.dart';
 import '../../../core/router/route_locations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/validation/validators.dart';
 import '../../../core/widgets/backend_status_banner.dart';
 import '../providers/auth_providers.dart';
@@ -163,12 +164,12 @@ class _AuthError extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: 0.12),
+        color: context.tokens.danger.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.danger),
+          Icon(Icons.error_outline_rounded, color: context.tokens.danger),
           const SizedBox(width: AppSpacing.sm),
           Expanded(child: Text(message)),
         ],

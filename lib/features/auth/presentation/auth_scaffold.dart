@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 
 class AuthScaffold extends StatelessWidget {
   const AuthScaffold({
@@ -78,15 +79,15 @@ class _BrandMark extends StatelessWidget {
         width: 68,
         height: 68,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF39A0FF), AppColors.electricBlue],
+            colors: [Color(0xFF39A0FF), context.tokens.accent],
           ),
           borderRadius: BorderRadius.circular(22),
           boxShadow: [
             BoxShadow(
-              color: AppColors.electricBlue.withValues(alpha: 0.35),
+              color: context.tokens.accent.withValues(alpha: 0.35),
               blurRadius: 28,
               offset: const Offset(0, 12),
             ),

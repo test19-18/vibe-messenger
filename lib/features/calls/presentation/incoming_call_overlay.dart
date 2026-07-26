@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../domain/call_models.dart';
 import '../providers/call_providers.dart';
@@ -56,7 +57,7 @@ class _IncomingCallSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Material(
-      color: AppColors.background.withValues(alpha: 0.95),
+      color: context.tokens.background.withValues(alpha: 0.95),
       child: SafeArea(
         child: Column(
           children: [
@@ -71,9 +72,9 @@ class _IncomingCallSheet extends ConsumerWidget {
             // Caller name (would be fetched from profile in production)
             Text(
               context.tr(ru: 'Входящий звонок', en: 'Incoming call'),
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: context.tokens.textSecondary,
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -93,7 +94,7 @@ class _IncomingCallSheet extends ConsumerWidget {
                   _IncomingCallButton(
                     icon: Icons.call_end_rounded,
                     label: context.tr(ru: 'Отклонить', en: 'Decline'),
-                    color: AppColors.danger,
+                    color: context.tokens.danger,
                     onPressed: () async {
                       await ref
                           .read(incomingCallActionProvider.notifier)
@@ -106,7 +107,7 @@ class _IncomingCallSheet extends ConsumerWidget {
                         ? Icons.videocam_rounded
                         : Icons.call_rounded,
                     label: context.tr(ru: 'Ответить', en: 'Accept'),
-                    color: AppColors.success,
+                    color: context.tokens.success,
                     onPressed: () async {
                       final success = await ref
                           .read(incomingCallActionProvider.notifier)
@@ -159,7 +160,7 @@ class _IncomingCallButton extends StatelessWidget {
           label,
           style: Theme.of(
             context,
-          ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
+          ).textTheme.bodySmall?.copyWith(color: context.tokens.textSecondary),
         ),
       ],
     );

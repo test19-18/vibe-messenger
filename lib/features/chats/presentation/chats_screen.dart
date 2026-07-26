@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../domain/conversation_summary.dart';
@@ -66,7 +67,7 @@ class ChatsScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.go('/contacts'),
-        backgroundColor: AppColors.electricBlue,
+        backgroundColor: context.tokens.accent,
         foregroundColor: Colors.white,
         tooltip: 'Новый чат',
         child: const Icon(Icons.edit_rounded),
@@ -95,7 +96,7 @@ class _ConversationTile extends StatelessWidget {
         : DateFormat('dd.MM').format(timestamp);
 
     return Material(
-      color: AppColors.surface,
+      color: context.tokens.surface,
       borderRadius: BorderRadius.circular(AppRadii.lg),
       child: InkWell(
         onTap: onTap,
@@ -152,7 +153,7 @@ class _ConversationTile extends StatelessWidget {
                               vertical: 3,
                             ),
                             decoration: BoxDecoration(
-                              color: AppColors.electricBlue,
+                              color: context.tokens.accent,
                               borderRadius: BorderRadius.circular(
                                 AppRadii.pill,
                               ),

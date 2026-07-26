@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../domain/user_profile.dart';
 import '../providers/profile_providers.dart';
@@ -56,13 +57,13 @@ class ProfileQrScreen extends ConsumerWidget {
                       version: QrVersions.auto,
                       size: 240,
                       backgroundColor: Colors.white,
-                      eyeStyle: const QrEyeStyle(
+                      eyeStyle: QrEyeStyle(
                         eyeShape: QrEyeShape.square,
-                        color: AppColors.background,
+                        color: context.tokens.background,
                       ),
-                      dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleStyle: QrDataModuleStyle(
                         dataModuleShape: QrDataModuleShape.square,
-                        color: AppColors.background,
+                        color: context.tokens.background,
                       ),
                       semanticsLabel: context.tr(
                         ru: 'QR-код профиля ${profile.visibleName}',
