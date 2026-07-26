@@ -72,7 +72,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           AppSpacing.md,
           AppSpacing.xs,
           AppSpacing.md,
-          110,
+          AppSpacing.lg,
         ),
         children: [
           const BackendStatusBanner(),
@@ -90,7 +90,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Уведомления'),
                 subtitle: const Text('Новые сообщения и звонки'),
               ),
-              const Divider(indent: 70),
+              const SectionDivider(),
               SwitchListTile.adaptive(
                 value: _messagePreview,
                 onChanged: _notifications
@@ -119,7 +119,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Компактные чаты'),
                 subtitle: const Text('Эксперимент этапа 1'),
               ),
-              const Divider(indent: 70),
+              const SectionDivider(),
               VibeListTile(
                 icon: Icons.dark_mode_rounded,
                 iconColor: context.tokens.accentPink,
@@ -142,7 +142,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: 'Конфиденциальность',
                 subtitle: 'RLS и пользовательская сессия',
               ),
-              Divider(indent: 70),
+              const SectionDivider(),
               VibeListTile(
                 icon: Icons.info_rounded,
                 iconColor: context.tokens.warning,

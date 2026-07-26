@@ -89,7 +89,7 @@ class ContactsScreen extends ConsumerWidget {
                       AppSpacing.md,
                       AppSpacing.xs,
                       AppSpacing.md,
-                      110,
+                      AppSpacing.lg,
                     ),
                     itemCount: profiles.length,
                     separatorBuilder: (context, index) =>

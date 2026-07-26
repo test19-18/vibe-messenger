@@ -37,7 +37,9 @@ class AppearanceSettingsScreen extends ConsumerWidget {
     final preferences =
         ref.watch(appPreferencesProvider).valueOrNull ?? const AppPreferences();
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Оформление', en: 'Appearance')),
       ),
       body: ListView(
@@ -170,7 +172,9 @@ class PrivacySettingsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Конфиденциальность', en: 'Privacy')),
       ),
       body: ListView(
@@ -246,7 +250,9 @@ class NotificationSettingsScreen extends ConsumerWidget {
     final firebaseReady = pushState.firebaseReady;
 
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Уведомления', en: 'Notifications')),
       ),
       body: ListView(
@@ -454,7 +460,9 @@ class DataStorageSettingsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Данные и память', en: 'Data and storage')),
       ),
       body: ListView(
@@ -603,7 +611,9 @@ class AppLockSettingsScreen extends ConsumerWidget {
     final state = ref.watch(appLockProvider);
     final configuration = state.valueOrNull?.configuration;
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Блокировка приложения', en: 'App lock')),
       ),
       body: ListView(
@@ -672,7 +682,9 @@ class DevicesScreen extends ConsumerWidget {
     final devices = ref.watch(devicesProvider);
     final user = ref.watch(currentUserProvider);
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(
           context.tr(ru: 'Устройства и сессии', en: 'Devices and sessions'),
         ),

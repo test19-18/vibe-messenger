@@ -48,59 +48,54 @@ abstract final class AppTheme {
       splashFactory: InkSparkle.splashFactory,
     );
 
-    final textTheme = base.textTheme
-        .apply(bodyColor: tokens.textPrimary, displayColor: tokens.textPrimary)
-        .copyWith(
-          headlineLarge: TextStyle(
-            color: tokens.textPrimary,
-            fontSize: 32,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.6,
-          ),
-          headlineSmall: TextStyle(
-            color: tokens.textPrimary,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.3,
-          ),
-          // Chat list row title / app bar title.
-          titleLarge: TextStyle(
-            color: tokens.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.2,
-          ),
-          titleMedium: TextStyle(
-            color: tokens.textPrimary,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-          titleSmall: TextStyle(
-            color: tokens.textPrimary,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
-          bodyLarge: TextStyle(
-            color: tokens.textPrimary,
-            fontSize: 16,
-            height: 1.3,
-          ),
-          bodyMedium: TextStyle(
-            color: tokens.textSecondary,
-            fontSize: 15,
-            height: 1.3,
-          ),
-          bodySmall: TextStyle(
-            color: tokens.textSecondary,
-            fontSize: 13,
-            height: 1.25,
-          ),
-          labelLarge: TextStyle(
-            color: tokens.textPrimary,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-          ),
-        );
+    // Derive every style from the base theme rather than building fresh
+    // TextStyles: that keeps `fontFamily` attached, and the whole tree inherits
+    // it through the default text style.
+    final baseText = base.textTheme.apply(
+      bodyColor: tokens.textPrimary,
+      displayColor: tokens.textPrimary,
+    );
+    final textTheme = baseText.copyWith(
+      headlineLarge: baseText.headlineLarge?.copyWith(
+        fontSize: 32,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.6,
+      ),
+      headlineSmall: baseText.headlineSmall?.copyWith(
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.3,
+      ),
+      // Chat list row title / app bar title.
+      titleLarge: baseText.titleLarge?.copyWith(
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.2,
+      ),
+      titleMedium: baseText.titleMedium?.copyWith(
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+      ),
+      titleSmall: baseText.titleSmall?.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+      bodyLarge: baseText.bodyLarge?.copyWith(fontSize: 16, height: 1.3),
+      bodyMedium: baseText.bodyMedium?.copyWith(
+        color: tokens.textSecondary,
+        fontSize: 15,
+        height: 1.3,
+      ),
+      bodySmall: baseText.bodySmall?.copyWith(
+        color: tokens.textSecondary,
+        fontSize: 13,
+        height: 1.25,
+      ),
+      labelLarge: baseText.labelLarge?.copyWith(
+        fontSize: 15,
+        fontWeight: FontWeight.w600,
+      ),
+    );
 
     final overlayStyle = SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -130,12 +125,7 @@ abstract final class AppTheme {
         iconTheme: IconThemeData(color: tokens.accent, size: 24),
         actionsIconTheme: IconThemeData(color: tokens.accent, size: 24),
         systemOverlayStyle: overlayStyle,
-        titleTextStyle: TextStyle(
-          color: tokens.textPrimary,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.2,
-        ),
+        titleTextStyle: textTheme.titleLarge,
       ),
       textTheme: textTheme,
       primaryTextTheme: textTheme,

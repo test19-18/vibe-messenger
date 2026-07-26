@@ -34,7 +34,9 @@ class ProfileScreen extends ConsumerWidget {
     final email = ref.watch(currentUserProvider)?.email ?? '';
 
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: const Text('Профиль'),
         actions: [
           IconButton(
@@ -67,7 +69,7 @@ class ProfileScreen extends ConsumerWidget {
                 AppSpacing.md,
                 AppSpacing.md,
                 AppSpacing.md,
-                110,
+                AppSpacing.lg,
               ),
               children: [
                 _ProfileHeader(profile: profile),
@@ -81,7 +83,7 @@ class ProfileScreen extends ConsumerWidget {
                       subtitle: 'Email аккаунта',
                       trailing: const SizedBox.shrink(),
                     ),
-                    const Divider(indent: 70),
+                    const SectionDivider(),
                     VibeListTile(
                       icon: Icons.badge_outlined,
                       iconColor: context.tokens.accentSecondary,
@@ -91,7 +93,7 @@ class ProfileScreen extends ConsumerWidget {
                       subtitle: 'Публичный username',
                       trailing: const SizedBox.shrink(),
                     ),
-                    const Divider(indent: 70),
+                    const SectionDivider(),
                     VibeListTile(
                       icon: Icons.info_outline_rounded,
                       iconColor: context.tokens.accentCyan,

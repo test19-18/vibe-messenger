@@ -13,18 +13,22 @@ abstract final class AppLocalizations {
     return isRussian(context) ? ru : en;
   }
 
-  /// Locale name safe to hand to [DateFormat].
+  /// Locale name safe to hand to [DateFormat], or null when its symbols are
+  /// not loaded.
   ///
   /// `main()` loads date symbols for every locale, but widget tests build
-  /// screens without that bootstrap — asking for an unloaded locale throws, so
-  /// fall back to the always-bundled `en_US` data instead.
-  static String dateLocale(BuildContext context) {
-    final locale = Localizations.localeOf(context).toString();
-    if (DateFormat.localeExists(locale)) {
-      return locale;
+  /// screens without that bootstrap. Naming *any* locale then throws
+  /// `LocaleDataException` — including `en_US` — so the fallback has to be no
+  /// locale at all, which is the constructor's own default.
+  static String? dateLocale(BuildContext context) {
+    final locale = Localizations.localeOf(context);
+    final full = locale.toString();
+    if (DateFormat.localeExists(full)) {
+      return full;
     }
-    final language = Localizations.localeOf(context).languageCode;
-    return DateFormat.localeExists(language) ? language : 'en_US';
+    return DateFormat.localeExists(locale.languageCode)
+        ? locale.languageCode
+        : null;
   }
 }
 
@@ -33,5 +37,5 @@ extension AppLocalizationContext on BuildContext {
       AppLocalizations.text(this, ru: ru, en: en);
 
   /// See [AppLocalizations.dateLocale].
-  String get dateLocale => AppLocalizations.dateLocale(this);
+  String? get dateLocale => AppLocalizations.dateLocale(this);
 }

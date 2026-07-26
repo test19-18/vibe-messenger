@@ -24,7 +24,9 @@ class CallHistoryScreen extends ConsumerWidget {
     final userId = ref.watch(currentUserProvider)?.id ?? '';
 
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'История звонков', en: 'Call history')),
       ),
       body: AsyncStateView<List<CallRecord>>(
@@ -57,7 +59,7 @@ class CallHistoryScreen extends ConsumerWidget {
               AppSpacing.md,
               AppSpacing.md,
               AppSpacing.md,
-              110,
+              AppSpacing.lg,
             ),
             itemCount: filtered.length,
             itemBuilder: (context, index) {

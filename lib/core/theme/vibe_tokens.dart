@@ -17,6 +17,7 @@ class VibeTokens extends ThemeExtension<VibeTokens> {
     required this.surface,
     required this.surfaceElevated,
     required this.surfaceHighest,
+    required this.groupedBackground,
     required this.appBar,
     required this.composer,
     required this.navBar,
@@ -62,6 +63,7 @@ class VibeTokens extends ThemeExtension<VibeTokens> {
     surface: Color(0xFF17212B),
     surfaceElevated: Color(0xFF202B36),
     surfaceHighest: Color(0xFF2B3843),
+    groupedBackground: Color(0xFF0E1621),
     appBar: Color(0xFF17212B),
     composer: Color(0xFF17212B),
     navBar: Color(0xFF17212B),
@@ -108,6 +110,7 @@ class VibeTokens extends ThemeExtension<VibeTokens> {
     surface: Color(0xFFFFFFFF),
     surfaceElevated: Color(0xFFF4F5F7),
     surfaceHighest: Color(0xFFE9EBEF),
+    groupedBackground: Color(0xFFEFEFF4),
     appBar: Color(0xFFFFFFFF),
     composer: Color(0xFFFFFFFF),
     navBar: Color(0xFFFFFFFF),
@@ -115,7 +118,7 @@ class VibeTokens extends ThemeExtension<VibeTokens> {
     separator: Color(0xFFE4E8EB),
     textPrimary: Color(0xFF0F1419),
     textSecondary: Color(0xFF707579),
-    textTertiary: Color(0xFF9AA0A6),
+    textTertiary: Color(0xFF878D93),
     accent: Color(0xFF3390EC),
     accentSoft: Color(0xFFE6F1FD),
     accentSecondary: Color(0xFF7B61FF),
@@ -130,7 +133,7 @@ class VibeTokens extends ThemeExtension<VibeTokens> {
     onBubbleIn: Color(0xFF0F1419),
     onBubbleOut: Color(0xFF0F1419),
     bubbleInMeta: Color(0xFF8D9198),
-    bubbleOutMeta: Color(0xFF5BAE58),
+    bubbleOutMeta: Color(0xFF4A9A47),
     bubbleInAccent: Color(0xFF3390EC),
     bubbleOutAccent: Color(0xFF4FAE4E),
     servicePill: Color(0x40536A7F),
@@ -155,6 +158,9 @@ class VibeTokens extends ThemeExtension<VibeTokens> {
   final Color surface;
   final Color surfaceElevated;
   final Color surfaceHighest;
+
+  /// Backdrop for grouped settings lists, so the cards on it stay legible.
+  final Color groupedBackground;
   final Color appBar;
   final Color composer;
   final Color navBar;
@@ -250,6 +256,7 @@ class VibeTokens extends ThemeExtension<VibeTokens> {
     Color? surface,
     Color? surfaceElevated,
     Color? surfaceHighest,
+    Color? groupedBackground,
     Color? appBar,
     Color? composer,
     Color? navBar,
@@ -293,6 +300,7 @@ class VibeTokens extends ThemeExtension<VibeTokens> {
       surface: surface ?? this.surface,
       surfaceElevated: surfaceElevated ?? this.surfaceElevated,
       surfaceHighest: surfaceHighest ?? this.surfaceHighest,
+      groupedBackground: groupedBackground ?? this.groupedBackground,
       appBar: appBar ?? this.appBar,
       composer: composer ?? this.composer,
       navBar: navBar ?? this.navBar,
@@ -344,6 +352,7 @@ class VibeTokens extends ThemeExtension<VibeTokens> {
       surface: mix(surface, other.surface),
       surfaceElevated: mix(surfaceElevated, other.surfaceElevated),
       surfaceHighest: mix(surfaceHighest, other.surfaceHighest),
+      groupedBackground: mix(groupedBackground, other.groupedBackground),
       appBar: mix(appBar, other.appBar),
       composer: mix(composer, other.composer),
       navBar: mix(navBar, other.navBar),

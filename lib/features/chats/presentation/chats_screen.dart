@@ -45,7 +45,7 @@ class ChatsScreen extends ConsumerWidget {
                 AppSpacing.md,
                 AppSpacing.xs,
                 AppSpacing.md,
-                110,
+                AppSpacing.lg,
               ),
               itemCount: items.length,
               separatorBuilder: (context, index) =>

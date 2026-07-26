@@ -221,7 +221,7 @@ class _DirectoryTab extends ConsumerWidget {
                   AppSpacing.md,
                   0,
                   AppSpacing.md,
-                  110,
+                  AppSpacing.lg,
                 ),
                 itemCount: items.length,
                 separatorBuilder: (_, _) =>

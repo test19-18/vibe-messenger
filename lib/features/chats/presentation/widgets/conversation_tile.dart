@@ -67,8 +67,11 @@ class ConversationTile extends StatelessWidget {
                   imageUrl: conversation.visibleAvatarUrl,
                   seed: conversation.id,
                   radius: AppSizes.chatListAvatar / 2,
-                  showPresence: !conversation.isGroup && peer != null,
-                  isOnline: peer?.isOnline ?? false,
+                  // Only a live "online" reads as information; a permanent
+                  // grey dot on every row is just noise.
+                  showPresence:
+                      !conversation.isGroup && (peer?.isOnline ?? false),
+                  isOnline: true,
                   presenceRingColor: tokens.background,
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -88,26 +91,34 @@ class ConversationTile extends StatelessWidget {
                                 color: tokens.textSecondary,
                               ),
                             ),
-                          Flexible(
-                            child: Text(
-                              conversation.visibleTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontSize: 16.5,
-                                fontWeight: FontWeight.w600,
-                              ),
+                          // Title takes the slack so the timestamp stays
+                          // pinned to the right edge of the row.
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    conversation.visibleTitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      fontSize: 16.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if (conversation.isMuted)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Icon(
+                                      Icons.volume_off_rounded,
+                                      size: 16,
+                                      color: tokens.textTertiary,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                          if (conversation.isMuted)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: Icon(
-                                Icons.volume_off_rounded,
-                                size: 16,
-                                color: tokens.textTertiary,
-                              ),
-                            ),
                           const SizedBox(width: AppSpacing.xs),
                           Text(
                             formatChatListTimestamp(
@@ -117,9 +128,7 @@ class ConversationTile extends StatelessWidget {
                             ),
                             style: theme.textTheme.bodySmall?.copyWith(
                               fontSize: 12.5,
-                              color: unread > 0 && !conversation.isMuted
-                                  ? tokens.accent
-                                  : tokens.textTertiary,
+                              color: tokens.textTertiary,
                             ),
                           ),
                         ],
@@ -218,7 +227,7 @@ class _TrailingMarks extends StatelessWidget {
 /// people expect from a chat list.
 String formatChatListTimestamp(
   DateTime timestamp, {
-  String locale = 'en_US',
+  String? locale,
   DateTime? now,
 }) {
   final reference = now ?? DateTime.now();
