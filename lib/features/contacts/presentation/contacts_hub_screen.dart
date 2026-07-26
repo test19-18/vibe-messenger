@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/errors/error_message.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -220,7 +221,7 @@ class _DirectoryTab extends ConsumerWidget {
                   AppSpacing.md,
                   0,
                   AppSpacing.md,
-                  110,
+                  AppSpacing.lg,
                 ),
                 itemCount: items.length,
                 separatorBuilder: (_, _) =>
@@ -337,9 +338,9 @@ class _RequestsTab extends ConsumerWidget {
                                 relationship.id,
                                 ContactStatus.accepted,
                               ),
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.check_rounded,
-                            color: AppColors.success,
+                            color: context.tokens.success,
                           ),
                           tooltip: context.tr(ru: 'Принять', en: 'Accept'),
                         ),
@@ -350,9 +351,9 @@ class _RequestsTab extends ConsumerWidget {
                                 relationship.id,
                                 ContactStatus.declined,
                               ),
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.close_rounded,
-                            color: AppColors.danger,
+                            color: context.tokens.danger,
                           ),
                           tooltip: context.tr(ru: 'Отклонить', en: 'Decline'),
                         ),

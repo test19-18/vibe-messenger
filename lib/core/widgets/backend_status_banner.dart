@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/app_config.dart';
 import '../providers/backend_providers.dart';
 import '../theme/app_colors.dart';
+import '../theme/vibe_tokens.dart';
 
 class BackendStatusBanner extends ConsumerWidget {
   const BackendStatusBanner({super.key});
@@ -23,12 +24,11 @@ class BackendStatusBanner extends ConsumerWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(AppSpacing.sm),
         decoration: BoxDecoration(
-          color: (failed ? AppColors.danger : AppColors.warning).withValues(
-            alpha: 0.12,
-          ),
+          color: (failed ? context.tokens.danger : context.tokens.warning)
+              .withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(AppRadii.sm),
           border: Border.all(
-            color: failed ? AppColors.danger : AppColors.warning,
+            color: failed ? context.tokens.danger : context.tokens.warning,
           ),
         ),
         child: Row(
@@ -36,15 +36,15 @@ class BackendStatusBanner extends ConsumerWidget {
           children: [
             Icon(
               failed ? Icons.error_outline_rounded : Icons.info_outline_rounded,
-              color: failed ? AppColors.danger : AppColors.warning,
+              color: failed ? context.tokens.danger : context.tokens.warning,
             ),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 backend.message,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: context.tokens.textPrimary,
+                ),
               ),
             ),
           ],

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/app_avatar.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../../../core/widgets/section_card.dart';
@@ -23,7 +24,9 @@ class CallHistoryScreen extends ConsumerWidget {
     final userId = ref.watch(currentUserProvider)?.id ?? '';
 
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'История звонков', en: 'Call history')),
       ),
       body: AsyncStateView<List<CallRecord>>(
@@ -56,7 +59,7 @@ class CallHistoryScreen extends ConsumerWidget {
               AppSpacing.md,
               AppSpacing.md,
               AppSpacing.md,
-              110,
+              AppSpacing.lg,
             ),
             itemCount: filtered.length,
             itemBuilder: (context, index) {
@@ -86,10 +89,10 @@ class _CallHistoryTile extends StatelessWidget {
         ? Icons.call_made_rounded
         : Icons.call_received_rounded;
     final directionColor = isMissed
-        ? AppColors.danger
+        ? context.tokens.danger
         : isOutgoing
-        ? AppColors.electricBlue
-        : AppColors.success;
+        ? context.tokens.accent
+        : context.tokens.success;
 
     final typeIcon = isVideo ? Icons.videocam_rounded : Icons.phone_rounded;
 
@@ -120,11 +123,11 @@ class _CallHistoryTile extends StatelessWidget {
                   child: Text(
                     record.peerDisplayName ?? 'Пользователь Вайба',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: isMissed ? AppColors.danger : null,
+                      color: isMissed ? context.tokens.danger : null,
                     ),
                   ),
                 ),
-                Icon(typeIcon, color: AppColors.textSecondary, size: 18),
+                Icon(typeIcon, color: context.tokens.textSecondary, size: 18),
               ],
             ),
             subtitle: Text(

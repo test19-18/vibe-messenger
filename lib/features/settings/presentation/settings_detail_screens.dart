@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/errors/error_message.dart';
 import '../../../core/localization/app_localizations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/widgets/async_state_view.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../auth/providers/auth_providers.dart';
@@ -36,7 +37,9 @@ class AppearanceSettingsScreen extends ConsumerWidget {
     final preferences =
         ref.watch(appPreferencesProvider).valueOrNull ?? const AppPreferences();
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Оформление', en: 'Appearance')),
       ),
       body: ListView(
@@ -169,7 +172,9 @@ class PrivacySettingsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Конфиденциальность', en: 'Privacy')),
       ),
       body: ListView(
@@ -245,7 +250,9 @@ class NotificationSettingsScreen extends ConsumerWidget {
     final firebaseReady = pushState.firebaseReady;
 
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Уведомления', en: 'Notifications')),
       ),
       body: ListView(
@@ -256,11 +263,13 @@ class NotificationSettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: firebaseReady
-                  ? AppColors.success.withValues(alpha: 0.12)
-                  : AppColors.warning.withValues(alpha: 0.12),
+                  ? context.tokens.success.withValues(alpha: 0.12)
+                  : context.tokens.warning.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(AppRadii.md),
               border: Border.all(
-                color: firebaseReady ? AppColors.success : AppColors.warning,
+                color: firebaseReady
+                    ? context.tokens.success
+                    : context.tokens.warning,
               ),
             ),
             child: Row(
@@ -270,7 +279,9 @@ class NotificationSettingsScreen extends ConsumerWidget {
                   firebaseReady
                       ? Icons.cloud_done_rounded
                       : Icons.cloud_off_rounded,
-                  color: firebaseReady ? AppColors.success : AppColors.warning,
+                  color: firebaseReady
+                      ? context.tokens.success
+                      : context.tokens.warning,
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
@@ -346,8 +357,8 @@ class NotificationSettingsScreen extends ConsumerWidget {
                         ? Icons.notifications_active_rounded
                         : Icons.notifications_off_rounded,
                     color: pushState.notificationPermissionGranted
-                        ? AppColors.success
-                        : AppColors.warning,
+                        ? context.tokens.success
+                        : context.tokens.warning,
                   ),
                   title: Text(
                     context.tr(
@@ -367,9 +378,9 @@ class NotificationSettingsScreen extends ConsumerWidget {
                           ),
                   ),
                   trailing: pushState.notificationPermissionGranted
-                      ? const Icon(
+                      ? Icon(
                           Icons.check_circle_rounded,
-                          color: AppColors.success,
+                          color: context.tokens.success,
                         )
                       : FilledButton.tonal(
                           onPressed: () async {
@@ -422,9 +433,9 @@ class NotificationSettingsScreen extends ConsumerWidget {
                           ),
                   ),
                   trailing: pushState.deviceRegistered
-                      ? const Icon(
+                      ? Icon(
                           Icons.check_circle_rounded,
-                          color: AppColors.success,
+                          color: context.tokens.success,
                         )
                       : const SizedBox.shrink(),
                 ),
@@ -449,7 +460,9 @@ class DataStorageSettingsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Данные и память', en: 'Data and storage')),
       ),
       body: ListView(
@@ -598,7 +611,9 @@ class AppLockSettingsScreen extends ConsumerWidget {
     final state = ref.watch(appLockProvider);
     final configuration = state.valueOrNull?.configuration;
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(context.tr(ru: 'Блокировка приложения', en: 'App lock')),
       ),
       body: ListView(
@@ -667,7 +682,9 @@ class DevicesScreen extends ConsumerWidget {
     final devices = ref.watch(devicesProvider);
     final user = ref.watch(currentUserProvider);
     return Scaffold(
+      backgroundColor: context.tokens.groupedBackground,
       appBar: AppBar(
+        backgroundColor: context.tokens.groupedBackground,
         title: Text(
           context.tr(ru: 'Устройства и сессии', en: 'Devices and sessions'),
         ),
@@ -684,7 +701,7 @@ class DevicesScreen extends ConsumerWidget {
             ),
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.surfaceHigh,
+              color: context.tokens.surfaceElevated,
               borderRadius: BorderRadius.circular(AppRadii.md),
             ),
             child: Text(

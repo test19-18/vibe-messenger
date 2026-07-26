@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../errors/error_message.dart';
 import '../theme/app_colors.dart';
+import '../theme/vibe_tokens.dart';
 
 class AsyncStateView<T> extends StatelessWidget {
   const AsyncStateView({
@@ -92,11 +93,11 @@ class EmptyState extends StatelessWidget {
             Container(
               width: 72,
               height: 72,
-              decoration: const BoxDecoration(
-                color: AppColors.surfaceHigh,
+              decoration: BoxDecoration(
+                color: context.tokens.accentSoft,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, size: 34, color: AppColors.electricBlue),
+              child: Icon(icon, size: 34, color: context.tokens.accent),
             ),
             const SizedBox(height: AppSpacing.lg),
             Text(
@@ -135,10 +136,10 @@ class ErrorState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.cloud_off_rounded,
               size: 54,
-              color: AppColors.danger,
+              color: context.tokens.danger,
             ),
             const SizedBox(height: AppSpacing.md),
             Text(

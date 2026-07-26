@@ -6,6 +6,7 @@ import '../../../core/errors/error_message.dart';
 import '../../../core/providers/backend_providers.dart';
 import '../../../core/router/route_locations.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/vibe_tokens.dart';
 import '../../../core/validation/validators.dart';
 import '../../../core/widgets/backend_status_banner.dart';
 import '../providers/auth_providers.dart';
@@ -98,16 +99,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
+            Text(
               'Ссылка должна открыть установленное приложение «Вайб», а не localhost. '
               'После изменения настройки Supabase запросите новое письмо.',
-              style: TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: context.tokens.textSecondary),
             ),
             const SizedBox(height: AppSpacing.md),
             if (resendState.hasError) ...[
               Text(
                 errorMessage(resendState.error!),
-                style: const TextStyle(color: AppColors.danger),
+                style: TextStyle(color: context.tokens.danger),
               ),
               const SizedBox(height: AppSpacing.sm),
             ],
@@ -197,7 +198,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             if (authState.hasError) ...[
               Text(
                 errorMessage(authState.error!),
-                style: const TextStyle(color: AppColors.danger),
+                style: TextStyle(color: context.tokens.danger),
               ),
               const SizedBox(height: AppSpacing.md),
             ],
